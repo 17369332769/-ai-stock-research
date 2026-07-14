@@ -101,13 +101,36 @@ jobs:
         run: docker compose -f infra/docker-compose.yml config
 
       # spec §14.3 硬约束：端口只允许绑 127.0.0.1
+      #
+      # 检查脚本写成独立文件，不用内联 python3 -c —— 那样引号要穿过
+      # YAML → shell → Python 三层转义，极易写崩（而脚本一崩，这道门就名存实亡）。
       - name: 端口必须只绑回环
         run: |
           set -euo pipefail
-          published=$(docker compose -f infra/docker-compose.yml config --format json \
-            | python3 -c 'import json,sys; c=json.load(sys.stdin); print("\n".join(f"{s}:{p.get(\"host_ip\",\"\")}" for s,v in c["services"].items() for p in v.get("ports",[])))')
-          echo "${published}"
-          if echo "${published}" | grep -v ':127.0.0.1$' | grep -q ':'; then
-            echo "存在非 127.0.0.1 的端口绑定，违反 spec §14.3" >&2
-            exit 1
-          fi
+          docker compose -f infra/docker-compose.yml config --format json > /tmp/compose.json
+          python3 - <<'PY'
+          import json
+          import sys
+
+          config = json.load(open("/tmp/compose.json"))
+          offenders = []
+          checked = 0
+          for name, service in config.get("services", {}).items():
+              for port in service.get("ports", []) or []:
+                  checked += 1
+                  host_ip = port.get("host_ip", "")
+                  published = port.get("published", "?")
+                  print(f"  {name}: {host_ip or '(未绑定 host_ip)'}:{published}")
+                  if host_ip != "127.0.0.1":
+                      offenders.append(f"{name} 的端口 {published} 绑在 {host_ip or '0.0.0.0'}")
+
+          if not checked:
+              print("::error::没有发现任何发布端口 —— 这道门形同虚设，检查 compose 文件或解析逻辑")
+              sys.exit(1)
+          if offenders:
+              print("::error::存在非 127.0.0.1 的端口绑定，违反 spec §14.3")
+              for item in offenders:
+                  print(f"  - {item}")
+              sys.exit(1)
+          print(f"OK：{checked} 个发布端口全部绑定 127.0.0.1")
+          PY
