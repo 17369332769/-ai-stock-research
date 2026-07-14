@@ -1,0 +1,31 @@
+# OpenBB AKShare Provider —— 可独立安装的 OpenBB 扩展。
+#
+#   pip install -e services/openbb_extensions/akshare_provider
+#
+# 安装后 OpenBB 通过 entry point 组 "openbb_provider_extension" 自动发现本 Provider，
+# 无需修改 OpenBB 源码。package-dir 把本目录同时映射为发行包 `openbb_akshare`，
+# 因此同一份文件既能被仓库内以 `services.openbb_extensions.akshare_provider` import
+# （用于确定性契约测试），又能被 OpenBB 以 `openbb_akshare` 加载。
+# 前提：包内全部使用相对 import。
+
+[project]
+name = "openbb-akshare"
+version = "0.1.0"
+description = "OpenBB provider for A-share quotes/bars/news via akshare (EastMoney)"
+requires-python = ">=3.12,<3.13"
+license = { text = "AGPL-3.0-only" }
+dependencies = [
+  "openbb-core>=1.6.10,<2.0.0",
+  "akshare==1.18.64",
+]
+
+[project.entry-points."openbb_provider_extension"]
+akshare = "openbb_akshare.provider:akshare_provider"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = { "openbb_akshare" = "." }
+packages = ["openbb_akshare", "openbb_akshare.models"]

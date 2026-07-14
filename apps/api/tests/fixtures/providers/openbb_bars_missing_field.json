@@ -1,0 +1,53 @@
+{
+  "results": [
+    {
+      "symbol": "600519",
+      "date": "2026-07-10T15:00:00+08:00",
+      "open": 1190.0,
+      "high": 1205.5,
+      "low": 1188.0,
+      "close": 1201.0,
+      "volume": 28000.0,
+      "turnover": 3350000000.0,
+      "timeframe": "1d",
+      "adjustment": "qfq",
+      "source": "eastmoney_via_akshare",
+      "source_url": "https://quote.eastmoney.com/sh600519.html"
+    },
+    {
+      "symbol": "600519",
+      "date": "2026-07-13T15:00:00+08:00",
+      "open": 1202.0,
+      "high": 1214.0,
+      "low": 1199.0,
+      "volume": 30100.0,
+      "turnover": 3630000000.0,
+      "timeframe": "1d",
+      "adjustment": "qfq",
+      "source": "eastmoney_via_akshare",
+      "source_url": "https://quote.eastmoney.com/sh600519.html"
+    },
+    {
+      "symbol": "600519",
+      "date": "2026-07-14T15:00:00+08:00",
+      "open": 1212.0,
+      "high": 1220.0,
+      "low": 1208.0,
+      "close": 1215.0,
+      "volume": 31234.0,
+      "turnover": 3790000000.0,
+      "timeframe": "1d",
+      "adjustment": "qfq",
+      "source": "eastmoney_via_akshare",
+      "source_url": "https://quote.eastmoney.com/sh600519.html"
+    }
+  ],
+  "provider": "akshare",
+  "warnings": [],
+  "chart": null,
+  "extra": {
+    "metadata": {
+      "arguments": {}
+    }
+  }
+}

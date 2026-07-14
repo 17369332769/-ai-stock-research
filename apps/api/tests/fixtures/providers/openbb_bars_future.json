@@ -1,0 +1,26 @@
+{
+  "results": [
+    {
+      "symbol": "600519",
+      "date": "2026-07-21T15:00:00+08:00",
+      "open": 1220.0,
+      "high": 1240.0,
+      "low": 1215.0,
+      "close": 1238.0,
+      "volume": 29000.0,
+      "turnover": 3560000000.0,
+      "timeframe": "1d",
+      "adjustment": "qfq",
+      "source": "eastmoney_via_akshare",
+      "source_url": "https://quote.eastmoney.com/sh600519.html"
+    }
+  ],
+  "provider": "akshare",
+  "warnings": [],
+  "chart": null,
+  "extra": {
+    "metadata": {
+      "arguments": {}
+    }
+  }
+}

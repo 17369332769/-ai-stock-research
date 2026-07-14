@@ -1,0 +1,336 @@
+# 特征集定义 v1（spec §9.2 / §9.3.1）
+#
+# 铁律：
+#   1. 任何字段、窗口或缺失值策略的变化都必须升级 version（新建 v2.yaml），不得原地改 v1。
+#      模型产物记录本文件的 sha256；推理时 sha 不一致直接 ModelUnavailable，防止训练/线上漂移。
+#   2. 所有特征都是 point-in-time：只允许读取 data_cutoff 及之前可见的数据。
+#      可见性判定见 timestamp_conventions，实现在 services/prediction/features/pit.py。
+#
+# 本文件由 services/prediction/features/config.py 解析（受限 YAML 子集，不依赖 pyyaml）。
+
+version: v1
+
+# ── 可见性约定：这是 PIT 的定义本身，比特征公式更重要 ──────────────────────
+timestamp_conventions:
+  # 日线在其交易日收盘（15:00 Asia/Shanghai）之后才可见。
+  # 不使用 bar_time <= cutoff：日线的 bar_time 可能被上游写成当日 00:00，
+  # 那样 09:45 的预测就会读到当天尚未收盘的收盘价 —— 这是最典型的泄漏。
+  daily_bar_visible_at: session_close
+  daily_session_close: "15:00"
+  # 5 分钟线的 bar_time 视为该 bar 的**结束**时刻（akshare stock_zh_a_hist_min_em 语义）。
+  # 因此 bar_time <= cutoff 即整根 bar 已完成。
+  minute_bar_timestamp: bar_end
+  minute_bar_minutes: 5
+  # 文档以 published_at 为可见时刻；observed_at（入库时刻）不参与可见性判定。
+  document_visible_at: published_at
+
+# ── 历史长度门槛（spec §9.3）──────────────────────────────────────────────
+history_requirements:
+  # 计算全部日频特征所需的最少已完成交易日（ret_60 / ma_dist_60 需要 60 期回看 + 当期）
+  min_completed_sessions: 61
+  # 一周模型：日线至少 3 年，数据不足不启用（spec §9.3）
+  next_5d_min_sessions: 720
+  # 今日模型：至少 120 个有效交易日（spec §9.3）
+  today_close_min_sessions: 120
+  # 今日模型的早盘分钟特征最少需要的分钟 bar 数（09:35..09:45 至少 3 根）
+  today_close_min_minute_bars: 3
+
+# ── 基准 ────────────────────────────────────────────────────────────────
+benchmarks:
+  csi300: "000300"
+  sse: "000001"
+
+# ── 事件特征的取数窗口 ──────────────────────────────────────────────────
+# 这个窗口影响特征语义（超出窗口的旧文档一律视为"没有"），所以必须写在契约里，
+# 而不是藏在 repository 的一个常量里。改动它 = 改特征 = 必须升版本。
+event:
+  document_lookback_days: 90
+
+# ── 漂移监控的关键特征（spec §9.3.1 / §9.5：PSI 阈值 0.10 / 0.20 / 0.30）──
+psi:
+  key_features:
+    - ret_5
+    - ret_20
+    - ma_dist_20
+    - vol_20
+    - volume_rel_ma20
+    - rel_strength_csi300_20
+  bins: 10
+  lookback_sessions: 20
+  drift_threshold: 0.20      # > 0.20 标记漂移，置信度只能 low
+  block_threshold: 0.30      # > 0.30 停止生成新预测并返回 MODEL_UNAVAILABLE
+
+# ── 特征 ────────────────────────────────────────────────────────────────
+# scope: base   —— 两个模型都用
+# scope: today  —— 只有 today_close 模型用（spec §9.2「今日模型专用」）
+# missing: nan  —— 缺失即 NaN，交给 LightGBM 原生处理；不得填 0 冒充真值
+# missing: zero —— 语义上「没有」就是 0（例如公告条数），不是缺失
+features:
+  # 价格动量：1/2/5/10/20/60 期收益（spec §9.2）
+  - name: ret_1
+    group: momentum
+    scope: base
+    window: 1
+    missing: nan
+    description: 收盘价 1 个交易日收益
+  - name: ret_2
+    group: momentum
+    scope: base
+    window: 2
+    missing: nan
+    description: 收盘价 2 个交易日收益
+  - name: ret_5
+    group: momentum
+    scope: base
+    window: 5
+    missing: nan
+    description: 收盘价 5 个交易日收益
+  - name: ret_10
+    group: momentum
+    scope: base
+    window: 10
+    missing: nan
+    description: 收盘价 10 个交易日收益
+  - name: ret_20
+    group: momentum
+    scope: base
+    window: 20
+    missing: nan
+    description: 收盘价 20 个交易日收益
+  - name: ret_60
+    group: momentum
+    scope: base
+    window: 60
+    missing: nan
+    description: 收盘价 60 个交易日收益
+
+  # 趋势：价格相对 5/10/20/60 期均线距离（spec §9.2）
+  - name: ma_dist_5
+    group: trend
+    scope: base
+    window: 5
+    missing: nan
+    description: 收盘价 / 5 期简单均线 - 1
+  - name: ma_dist_10
+    group: trend
+    scope: base
+    window: 10
+    missing: nan
+    description: 收盘价 / 10 期简单均线 - 1
+  - name: ma_dist_20
+    group: trend
+    scope: base
+    window: 20
+    missing: nan
+    description: 收盘价 / 20 期简单均线 - 1
+  - name: ma_dist_60
+    group: trend
+    scope: base
+    window: 60
+    missing: nan
+    description: 收盘价 / 60 期简单均线 - 1
+
+  # 波动：5/20 期已实现波动、ATR、日内振幅（spec §9.2）
+  - name: vol_5
+    group: volatility
+    scope: base
+    window: 5
+    missing: nan
+    description: 最近 5 期日收益的样本标准差（未年化）
+  - name: vol_20
+    group: volatility
+    scope: base
+    window: 20
+    missing: nan
+    description: 最近 20 期日收益的样本标准差（未年化）
+  - name: atr_14
+    group: volatility
+    scope: base
+    window: 14
+    missing: nan
+    description: 14 期平均真实波幅 / 最新收盘价（无量纲）
+  - name: amplitude_1
+    group: volatility
+    scope: base
+    window: 1
+    missing: nan
+    description: 最近一个已完成交易日的日内振幅 (high - low) / 前收
+
+  # 成交：成交量相对 20 期均值、换手率、量比（spec §9.2）
+  - name: volume_rel_ma20
+    group: volume
+    scope: base
+    window: 20
+    missing: nan
+    description: 最新成交量 / 最近 20 期成交量均值
+  - name: turnover_rate
+    group: volume
+    scope: base
+    window: 1
+    missing: nan
+    required: false
+    description: >-
+      换手率 = 成交量 / 自由流通股本。当前 spec §6 的 bars/instruments 表没有股本字段，
+      本数据口径下恒为缺失（NaN），训练时会被记为 unavailable 并写入模型卡。
+      未来数据口径补上 free_float_shares 后无需改动特征定义即可生效。
+  - name: volume_ratio
+    group: volume
+    scope: base
+    window: 5
+    missing: nan
+    description: >-
+      量比（日频形式）= 最新已完成交易日成交量 / 之前 5 个交易日成交量均值。
+      刻意不使用分钟线的盘中量比：一周模型的历史样本没有 3 年分钟线，
+      盘中口径会让训练与线上不一致。盘中成交强度由 today 域的 morning_volume_share 表达。
+
+  # 市场：沪深300 与上证指数同期收益、相对强弱（spec §9.2）
+  - name: bench_csi300_ret_1
+    group: market
+    scope: base
+    window: 1
+    missing: nan
+    description: 沪深300 同期 1 日收益
+  - name: bench_csi300_ret_5
+    group: market
+    scope: base
+    window: 5
+    missing: nan
+    description: 沪深300 同期 5 日收益
+  - name: bench_csi300_ret_20
+    group: market
+    scope: base
+    window: 20
+    missing: nan
+    description: 沪深300 同期 20 日收益
+  - name: bench_sse_ret_1
+    group: market
+    scope: base
+    window: 1
+    missing: nan
+    description: 上证指数同期 1 日收益
+  - name: bench_sse_ret_5
+    group: market
+    scope: base
+    window: 5
+    missing: nan
+    description: 上证指数同期 5 日收益
+  - name: bench_sse_ret_20
+    group: market
+    scope: base
+    window: 20
+    missing: nan
+    description: 上证指数同期 20 日收益
+  - name: rel_strength_csi300_1
+    group: market
+    scope: base
+    window: 1
+    missing: nan
+    description: ret_1 - bench_csi300_ret_1
+  - name: rel_strength_csi300_5
+    group: market
+    scope: base
+    window: 5
+    missing: nan
+    description: ret_5 - bench_csi300_ret_5
+  - name: rel_strength_csi300_20
+    group: market
+    scope: base
+    window: 20
+    missing: nan
+    description: ret_20 - bench_csi300_ret_20
+  - name: rel_strength_sse_1
+    group: market
+    scope: base
+    window: 1
+    missing: nan
+    description: ret_1 - bench_sse_ret_1
+  - name: rel_strength_sse_5
+    group: market
+    scope: base
+    window: 5
+    missing: nan
+    description: ret_5 - bench_sse_ret_5
+  - name: rel_strength_sse_20
+    group: market
+    scope: base
+    window: 20
+    missing: nan
+    description: ret_20 - bench_sse_ret_20
+
+  # 事件特征：只允许 published_at <= data_cutoff 的文档（spec §9.2，死线）
+  - name: doc_count_1d
+    group: event
+    scope: base
+    window: 1
+    missing: zero
+    description: cutoff 前 24 小时内可见的文档数（公告 + 新闻）
+  - name: doc_count_5d
+    group: event
+    scope: base
+    window: 5
+    missing: zero
+    description: cutoff 前 5 个自然日内可见的文档数
+  - name: announcement_count_5d
+    group: event
+    scope: base
+    window: 5
+    missing: zero
+    description: cutoff 前 5 个自然日内可见的公告数
+  - name: news_count_5d
+    group: event
+    scope: base
+    window: 5
+    missing: zero
+    description: cutoff 前 5 个自然日内可见的新闻数
+  - name: hours_since_last_document
+    group: event
+    scope: base
+    window: 0
+    missing: nan
+    required: false
+    description: >-
+      距最近一条可见文档 published_at 的小时数。取数窗口为 event.document_lookback_days，
+      窗口内没有可见文档即缺失（不是 0，也不是一个编造的大数）。
+      required=false：一只股票 90 天没有公告/新闻是**正常状态**，不是数据降级 ——
+      若把它当必填缺失，几乎每只票都会被压到 low 置信度，那是错的。
+
+  # 今日模型专用（spec §9.2）：全部来自当日分钟线，分钟线不足时退化为开盘模型
+  - name: open_gap
+    group: intraday
+    scope: today
+    window: 0
+    missing: nan
+    requires: daily_open
+    description: 当日开盘价 / 昨收 - 1（开盘缺口）。开盘模型下仍然可用。
+  - name: ret_since_0945
+    group: intraday
+    scope: today
+    window: 0
+    missing: nan
+    requires: minute_bars
+    description: cutoff 时点最新价 / 09:45 收盘价 - 1（09:45 后当日收益）
+  - name: morning_range
+    group: intraday
+    scope: today
+    window: 0
+    missing: nan
+    requires: minute_bars
+    description: (当日最高 - 当日最低) / 昨收，只统计 cutoff 之前已完成的分钟 bar（早盘区间）
+  - name: morning_volume_share
+    group: intraday
+    scope: today
+    window: 5
+    missing: nan
+    requires: minute_bars
+    description: cutoff 前当日累计成交量 / 之前 5 个交易日全日成交量均值（早盘成交占比）
+
+# ── 退化策略（spec §9.3：早盘分钟特征不足时退化为开盘模型并标记原因）────────
+degradation:
+  today_close:
+    # 分钟 bar 少于 today_close_min_minute_bars 时，requires=minute_bars 的特征置为缺失，
+    # 记录 reason=minute_bars_insufficient，并强制把置信度压到 low。
+    on_insufficient_minute_bars:
+      mode: open_model
+      drop_requires: minute_bars
+      reason: minute_bars_insufficient
+      force_confidence: low

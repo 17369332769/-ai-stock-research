@@ -1,0 +1,60 @@
+{
+  "results": [
+    {
+      "symbol": "600519",
+      "name": "贵州茅台",
+      "exchange": "SSE",
+      "index_code": "000300",
+      "universe": "CSI300",
+      "as_of": "2026-07-14",
+      "snapshot_date": "2026-06-15",
+      "source": "csindex",
+      "source_url": "https://oss-ch.csindex.com.cn/static/html/csindex/public/uploads/file/autofile/cons/000300cons.xls",
+      "observed_at": "2026-07-14T07:30:00+08:00"
+    },
+    {
+      "symbol": "300750",
+      "name": "宁德时代",
+      "exchange": "SZSE",
+      "index_code": "000300",
+      "universe": "CSI300",
+      "as_of": "2026-07-14",
+      "snapshot_date": "2026-06-15",
+      "source": "csindex",
+      "source_url": "https://oss-ch.csindex.com.cn/static/html/csindex/public/uploads/file/autofile/cons/000300cons.xls",
+      "observed_at": "2026-07-14T07:30:00+08:00"
+    },
+    {
+      "symbol": "601318",
+      "name": "中国平安",
+      "exchange": "SSE",
+      "index_code": "000300",
+      "universe": "CSI300",
+      "as_of": "2026-07-14",
+      "snapshot_date": "2026-06-15",
+      "source": "csindex",
+      "source_url": "https://oss-ch.csindex.com.cn/static/html/csindex/public/uploads/file/autofile/cons/000300cons.xls",
+      "observed_at": "2026-07-14T07:30:00+08:00"
+    },
+    {
+      "symbol": "600036",
+      "name": "招商银行",
+      "exchange": "SSE",
+      "index_code": "000300",
+      "universe": "CSI300",
+      "as_of": "2026-07-14",
+      "snapshot_date": "2026-06-15",
+      "source": "csindex",
+      "source_url": "https://oss-ch.csindex.com.cn/static/html/csindex/public/uploads/file/autofile/cons/000300cons.xls",
+      "observed_at": "2026-07-14T07:30:00+08:00"
+    }
+  ],
+  "provider": "csi300",
+  "warnings": [],
+  "chart": null,
+  "extra": {
+    "metadata": {
+      "arguments": {}
+    }
+  }
+}

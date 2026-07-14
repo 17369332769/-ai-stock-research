@@ -1,0 +1,242 @@
+/**
+ * 九种必须状态（spec §13.2）及其判定。
+ *
+ * 判定输入一律来自 API 字段（freshness / market.phase / job / 错误码），
+ * 前端不自行计算新鲜度、收益或概率（spec §5.1）。
+ */
+
+import { ApiError, isApiError } from './api/client';
+import type {
+  ClientErrorCode,
+  JobDTO,
+  MarketDTO,
+  MarketPhase,
+  QuoteDTO,
+} from './api/types';
+
+/** spec §13.2 规定的九种状态。 */
+export const UI_STATES = [
+  'initial_backfill', // 首次回补
+  'ok', // 正常
+  'partial_data', // 部分数据缺失
+  'quote_stale', // 行情过期
+  'provider_failed', // 数据源失败
+  'model_unavailable', // 模型不可用
+  'no_documents', // 无文档
+  'no_prediction', // 无预测
+  'market_closed', // 休市
+] as const;
+
+export type UiState = (typeof UI_STATES)[number];
+
+export type StateTone = 'neutral' | 'info' | 'warning' | 'danger';
+
+export interface StateDescriptor {
+  label: string;
+  tone: StateTone;
+  description: string;
+}
+
+export const STATE_DESCRIPTORS: Record<UiState, StateDescriptor> = {
+  initial_backfill: {
+    label: '首次回补',
+    tone: 'info',
+    description: '正在回补历史数据，完成前不显示预测。',
+  },
+  ok: {
+    label: '正常',
+    tone: 'neutral',
+    description: '数据与模型均可用。',
+  },
+  partial_data: {
+    label: '部分数据缺失',
+    tone: 'warning',
+    description: '部分数据未取得，相关内容按缺失展示。',
+  },
+  quote_stale: {
+    label: '行情可能已过期',
+    tone: 'warning',
+    description: '行情已超过 180 秒未更新，不作为实时行情使用。',
+  },
+  provider_failed: {
+    label: '数据源失败',
+    tone: 'danger',
+    description: '上游数据源不可用，已有历史数据仍可查看。',
+  },
+  model_unavailable: {
+    label: '模型不可用',
+    tone: 'danger',
+    description: '当前没有可用的模型版本，暂不生成预测。',
+  },
+  no_documents: {
+    label: '无文档',
+    tone: 'neutral',
+    description: '暂无公告或新闻。',
+  },
+  no_prediction: {
+    label: '无预测',
+    tone: 'neutral',
+    description: '暂无可用预测。',
+  },
+  market_closed: {
+    label: '休市',
+    tone: 'info',
+    description: '当前非交易时段，显示最新交易日的收盘数据。',
+  },
+};
+
+export function stateLabel(state: UiState): string {
+  return STATE_DESCRIPTORS[state].label;
+}
+
+// ---------------------------------------------------------------------------
+// 错误码 → 状态
+// ---------------------------------------------------------------------------
+
+const ERROR_STATE_MAP: Partial<Record<ClientErrorCode, UiState>> = {
+  PROVIDER_UNAVAILABLE: 'provider_failed', // 424
+  MODEL_UNAVAILABLE: 'model_unavailable', // 503
+  INSUFFICIENT_DATA: 'no_prediction', // 422 样本不足
+  NETWORK_ERROR: 'provider_failed',
+};
+
+/** 把 API 错误映射到 UI 状态；不认识的错误返回 null（由调用方按通用错误展示）。 */
+export function mapErrorToState(error: unknown): UiState | null {
+  if (!isApiError(error)) return null;
+  return ERROR_STATE_MAP[error.code] ?? null;
+}
+
+/** 422 在预测语境下表示样本不足，文案需与"暂无预测"区分。 */
+export function isInsufficientData(error: unknown): error is ApiError {
+  return isApiError(error) && error.code === 'INSUFFICIENT_DATA';
+}
+
+// ---------------------------------------------------------------------------
+// 行情状态：休市 / 过期 / 正常
+// ---------------------------------------------------------------------------
+
+/** 连续竞价时段。只有这两个时段 + freshness=fresh 才允许称"实时"。 */
+const CONTINUOUS_TRADING_PHASES: readonly MarketPhase[] = ['morning', 'afternoon'];
+
+export function isMarketClosed(market: MarketDTO | null | undefined): boolean {
+  if (!market) return false;
+  return market.is_trading_day === false || market.phase === 'closed';
+}
+
+export interface QuoteStatus {
+  /** 页面级状态：休市与过期可同时成立，两条都要展示。 */
+  states: UiState[];
+  /** 价格标签。红线：过期或休市时禁止标"实时"。 */
+  priceLabel: string;
+  /** 是否允许以实时口径展示。 */
+  isRealtime: boolean;
+  stale: boolean;
+  closed: boolean;
+  ageSeconds: number | null;
+}
+
+/**
+ * 行情状态判定。
+ * 只读 API 的 quote.freshness / quote.age_seconds / market.phase，不比较本地时钟。
+ */
+export function resolveQuoteStatus(
+  quote: QuoteDTO | null | undefined,
+  market: MarketDTO | null | undefined,
+): QuoteStatus {
+  const closed = isMarketClosed(market);
+  const stale = quote?.freshness === 'stale';
+  const states: UiState[] = [];
+
+  if (closed) states.push('market_closed');
+  if (stale) states.push('quote_stale');
+
+  const inContinuousTrading =
+    market != null && CONTINUOUS_TRADING_PHASES.includes(market.phase);
+
+  // 只有"API 明确标记 fresh"才敢称实时：
+  // 没有行情、缺 freshness 字段、休市、非连续竞价时段，一律不是实时。
+  const fresh = quote?.freshness === 'fresh';
+  const isRealtime = fresh && !closed && (market == null || inContinuousTrading);
+
+  let priceLabel: string;
+  if (closed) {
+    priceLabel = '最新收盘价';
+  } else if (stale) {
+    priceLabel = '最后成交价（可能已过期）';
+  } else if (isRealtime) {
+    priceLabel = '最新价';
+  } else {
+    priceLabel = '最后成交价';
+  }
+
+  return {
+    states,
+    priceLabel,
+    isRealtime,
+    stale,
+    closed,
+    ageSeconds: quote?.age_seconds ?? null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 回补作业状态
+// ---------------------------------------------------------------------------
+
+export function isJobRunning(job: JobDTO | null | undefined): boolean {
+  if (!job) return false;
+  return job.status === 'queued' || job.status === 'running';
+}
+
+/**
+ * 回补作业 → 状态：
+ *  - 进行中 → 首次回补
+ *  - 成功但有 warning（如分钟线不可得，spec §7.1）→ 部分数据缺失
+ *  - 失败 → 数据源失败
+ */
+export function resolveJobState(job: JobDTO | null | undefined): UiState | null {
+  if (!job) return null;
+  if (isJobRunning(job)) return 'initial_backfill';
+  if (job.status === 'failed') return 'provider_failed';
+  if (job.status === 'succeeded' && (job.warnings?.length ?? 0) > 0) return 'partial_data';
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// 页面级状态汇总
+// ---------------------------------------------------------------------------
+
+export interface PageStateInput {
+  job?: JobDTO | null;
+  quote?: QuoteDTO | null;
+  market?: MarketDTO | null;
+  /** API 标注的缺失数据域（spec：部分数据缺失）。 */
+  missing?: string[] | null;
+  error?: unknown;
+}
+
+/**
+ * 汇总页面顶部需要展示的状态条。顺序即展示优先级。
+ * 注意：不做互斥裁剪 —— 休市 + 过期 + 部分缺失可以同时展示，
+ * 绝不能因为休市就吞掉"行情可能已过期"（spec §3.2 红线）。
+ */
+export function resolvePageStates(input: PageStateInput): UiState[] {
+  const states: UiState[] = [];
+
+  const errorState = mapErrorToState(input.error);
+  if (errorState) states.push(errorState);
+
+  const jobState = resolveJobState(input.job);
+  if (jobState && !states.includes(jobState)) states.push(jobState);
+
+  if ((input.missing?.length ?? 0) > 0 && !states.includes('partial_data')) {
+    states.push('partial_data');
+  }
+
+  const quoteStatus = resolveQuoteStatus(input.quote, input.market);
+  for (const state of quoteStatus.states) {
+    if (!states.includes(state)) states.push(state);
+  }
+
+  return states;
+}

@@ -1,0 +1,49 @@
+{
+  "results": [
+    {
+      "symbol": "600519",
+      "name": "贵州茅台",
+      "prev_close": 1211.0,
+      "open": 1212.0,
+      "high": 1220.0,
+      "low": 1208.0,
+      "volume": 31234.0,
+      "turnover": 3790000000.0,
+      "volume_ratio": 0.98,
+      "change_percent": 0.33,
+      "turnover_rate": 0.25,
+      "last_timestamp": "2026-07-14T09:50:00+08:00",
+      "source": "eastmoney_via_akshare",
+      "source_url": "https://quote.eastmoney.com/sh600519.html",
+      "volume_unit": "hand",
+      "amount_unit": "CNY"
+    },
+    {
+      "symbol": "000001",
+      "name": "平安银行",
+      "last_price": 11.24,
+      "prev_close": 11.28,
+      "open": 11.3,
+      "high": 11.36,
+      "low": 11.2,
+      "volume": 812345.0,
+      "turnover": 915000000.0,
+      "volume_ratio": 1.02,
+      "change_percent": -0.35,
+      "turnover_rate": 0.42,
+      "last_timestamp": "2026-07-14T09:50:00+08:00",
+      "source": "eastmoney_via_akshare",
+      "source_url": "https://quote.eastmoney.com/sz000001.html",
+      "volume_unit": "hand",
+      "amount_unit": "CNY"
+    }
+  ],
+  "provider": "akshare",
+  "warnings": [],
+  "chart": null,
+  "extra": {
+    "metadata": {
+      "arguments": {}
+    }
+  }
+}

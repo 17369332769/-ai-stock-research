@@ -1,0 +1,52 @@
+# APScheduler worker 镜像（spec §4.1：独立 worker 进程，不引入 Redis/Celery）。
+# 与 Dockerfile.api 共用同样的 builder 内容，Docker 层缓存会复用，不额外占磁盘。
+# 单独成文件是为了：worker 不监听任何端口、不装 uvicorn 入口、可独立回滚。
+
+FROM python:3.12-slim AS builder
+
+ENV PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+COPY pyproject.toml ./
+COPY apps/__init__.py apps/__init__.py
+COPY apps/api/__init__.py apps/api/__init__.py
+COPY services/__init__.py services/__init__.py
+RUN pip install --no-cache-dir -e .
+
+FROM python:3.12-slim AS runtime
+
+ARG GIT_SHA=dev
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app \
+    TZ=Asia/Shanghai \
+    PATH="/opt/venv/bin:$PATH" \
+    WORKER_STATE_DIR=/state \
+    GIT_SHA=${GIT_SHA}
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 tzdata \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 10001 app \
+    && mkdir -p /state && chown app:app /state
+
+COPY --from=builder /opt/venv /opt/venv
+
+WORKDIR /app
+COPY pyproject.toml ./
+COPY apps ./apps
+COPY services ./services
+COPY config ./config
+
+USER app
+
+# 不 EXPOSE 任何端口：worker 只出不进（spec §14.3 最小暴露面）
+CMD ["python", "-m", "services.worker.scheduler"]

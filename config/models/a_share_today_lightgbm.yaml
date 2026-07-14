@@ -1,0 +1,46 @@
+# 今日模型（spec §9.1：当日收盘价 / 昨日收盘价 - 1）
+#
+# 参考价固定为昨收，所以同一天 09:45 / 10:00 / ... / 14:45 的多个版本预测同一个目标，
+# 概率变化可以横向比较（spec §7.4）。
+
+model_key: a_share_today_lightgbm
+target_horizon: today_close
+feature_set_version: v1
+
+# 切分（spec §9.3：expanding-window walk-forward，禁止随机切分）
+test_fraction: 0.20
+min_train_sessions: 250
+walk_forward_folds: 5
+validation_sessions: 60
+# embargo 不在这里配：它由 horizon 决定（today_close = 1 个交易日），
+# 写死在 training/labels.py 的 horizon_embargo_sessions，避免有人手滑调小。
+
+# 区间（spec §7.4 的 p20 / p80）
+lower_quantile: 0.20
+upper_quantile: 0.80
+
+num_boost_round: 400
+early_stopping_rounds: 50
+
+# 共用超参。上涨概率只来自 classifier（binary），绝不由 regressor 的输出反推。
+common_params:
+  learning_rate: 0.03
+  num_leaves: 31
+  max_depth: 6
+  min_data_in_leaf: 100
+  feature_fraction: 0.8
+  bagging_fraction: 0.8
+  bagging_freq: 1
+  lambda_l2: 1.0
+  verbosity: -1
+  num_threads: 4
+  seed: 20260714
+  deterministic: true
+
+regressor_params:
+  objective: regression
+  metric: l1
+
+classifier_params:
+  objective: binary
+  metric: binary_logloss

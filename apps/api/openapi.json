@@ -1,0 +1,2996 @@
+{
+  "components": {
+    "schemas": {
+      "AddWatchlistRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "symbol": {
+            "description": "6 位 A 股代码，例如 600519",
+            "pattern": "^\\d{6}$",
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol"
+        ],
+        "title": "AddWatchlistRequest",
+        "type": "object"
+      },
+      "AgentConnectionDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "last_success_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success At"
+          },
+          "model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Name"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "degraded",
+              "unavailable"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "AgentConnectionDTO",
+        "type": "object"
+      },
+      "AnalogDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of_date": {
+            "description": "历史相似日期",
+            "format": "date",
+            "title": "As Of Date",
+            "type": "string"
+          },
+          "distance": {
+            "description": "距离分数，越小越相似",
+            "minimum": 0.0,
+            "title": "Distance",
+            "type": "number"
+          },
+          "feature_set_version": {
+            "description": "用于计算距离的特征版本（config/features/{version}.yaml）",
+            "title": "Feature Set Version",
+            "type": "string"
+          },
+          "features": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "description": "当时可见的 point-in-time 特征；某个特征当时算不出来就是 null，不补 0",
+            "title": "Features",
+            "type": "object"
+          },
+          "forward_return_1d": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "其后 1 个交易日的真实收益；历史数据不足以结算时为 null（不编造 0）",
+            "title": "Forward Return 1D"
+          },
+          "forward_return_5d": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "其后 5 个交易日的真实累计收益；不足以结算时为 null",
+            "title": "Forward Return 5D"
+          },
+          "horizon": {
+            "$ref": "#/components/schemas/PredictionHorizon"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "horizon",
+          "as_of_date",
+          "distance",
+          "features",
+          "feature_set_version",
+          "forward_return_1d",
+          "forward_return_5d"
+        ],
+        "title": "AnalogDTO",
+        "type": "object"
+      },
+      "AnalysisDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "analysis_type": {
+            "$ref": "#/components/schemas/AnalysisType"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "data_cutoff": {
+            "format": "date-time",
+            "title": "Data Cutoff",
+            "type": "string"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/Direction"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceDTO"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "horizon": {
+            "$ref": "#/components/schemas/EventHorizon"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Name"
+          },
+          "model_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Provider"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "symbol",
+          "analysis_type",
+          "direction",
+          "horizon",
+          "summary",
+          "data_cutoff",
+          "created_at"
+        ],
+        "title": "AnalysisDTO",
+        "type": "object"
+      },
+      "AnalysisType": {
+        "enum": [
+          "document",
+          "anomaly",
+          "daily_brief"
+        ],
+        "title": "AnalysisType",
+        "type": "string"
+      },
+      "ConfidenceLabel": {
+        "enum": [
+          "low",
+          "medium",
+          "high"
+        ],
+        "title": "ConfidenceLabel",
+        "type": "string"
+      },
+      "DataSourceDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "consecutive_failures": {
+            "default": 0,
+            "title": "Consecutive Failures",
+            "type": "integer"
+          },
+          "key": {
+            "description": "数据源标识，如 csindex / eastmoney_via_akshare / cninfo",
+            "title": "Key",
+            "type": "string"
+          },
+          "last_error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error Code"
+          },
+          "last_error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "已脱敏：worker 侧落盘前抹掉密钥（spec §14.3）",
+            "title": "Last Error Message"
+          },
+          "last_success_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "最后一次成功采集时间；从未成功为 null（spec §8）",
+            "title": "Last Success At"
+          },
+          "name": {
+            "description": "展示名",
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "degraded",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "status"
+        ],
+        "title": "DataSourceDTO",
+        "type": "object"
+      },
+      "Direction": {
+        "enum": [
+          "positive",
+          "negative",
+          "neutral",
+          "unknown"
+        ],
+        "title": "Direction",
+        "type": "string"
+      },
+      "DocumentDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "document_type": {
+            "$ref": "#/components/schemas/DocumentType"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "title": "Observed At",
+            "type": "string"
+          },
+          "published_at": {
+            "format": "date-time",
+            "title": "Published At",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "source_url": {
+            "title": "Source Url",
+            "type": "string"
+          },
+          "symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symbol"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "document_type",
+          "title",
+          "source",
+          "source_url",
+          "published_at",
+          "observed_at"
+        ],
+        "title": "DocumentDTO",
+        "type": "object"
+      },
+      "DocumentType": {
+        "enum": [
+          "announcement",
+          "news"
+        ],
+        "title": "DocumentType",
+        "type": "string"
+      },
+      "ErrorBody": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "request_id"
+        ],
+        "title": "ErrorBody",
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "additionalProperties": false,
+        "description": "错误信封。HTTP 状态由 ``AppError.status_code`` 唯一决定（不在路由里硬编码）。",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "ErrorResponse",
+        "type": "object"
+      },
+      "EventHorizon": {
+        "description": "Agent 分析的影响期限（analyses.horizon）。",
+        "enum": [
+          "intraday",
+          "short",
+          "medium",
+          "unknown"
+        ],
+        "title": "EventHorizon",
+        "type": "string"
+      },
+      "EvidenceDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "document_id": {
+            "format": "uuid",
+            "title": "Document Id",
+            "type": "string"
+          },
+          "published_at": {
+            "format": "date-time",
+            "title": "Published At",
+            "type": "string"
+          },
+          "quote": {
+            "description": "原文中连续存在的 1..300 个字符（spec §7.3）",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Quote",
+            "type": "string"
+          },
+          "source_url": {
+            "minLength": 1,
+            "title": "Source Url",
+            "type": "string"
+          },
+          "title": {
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "document_id",
+          "title",
+          "source_url",
+          "published_at",
+          "quote"
+        ],
+        "title": "EvidenceDTO",
+        "type": "object"
+      },
+      "Exchange": {
+        "enum": [
+          "SSE",
+          "SZSE"
+        ],
+        "title": "Exchange",
+        "type": "string"
+      },
+      "Freshness": {
+        "description": "行情新鲜度。禁止把 stale 当 fresh 展示（spec §3.2）。",
+        "enum": [
+          "fresh",
+          "stale"
+        ],
+        "title": "Freshness",
+        "type": "string"
+      },
+      "InstrumentDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "description": "是否仍在上市交易",
+            "title": "Active",
+            "type": "boolean"
+          },
+          "exchange": {
+            "$ref": "#/components/schemas/Exchange"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry"
+          },
+          "is_current_universe_member": {
+            "description": "是否为查询日沪深300当前成分股。false 表示已调出：历史页面与既有预测保留，但停止生成新预测且禁止重新添加（spec §3.1）",
+            "title": "Is Current Universe Member",
+            "type": "boolean"
+          },
+          "listed_at": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Listed At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "symbol": {
+            "description": "6 位 A 股代码",
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "name",
+          "exchange",
+          "active",
+          "is_current_universe_member"
+        ],
+        "title": "InstrumentDTO",
+        "type": "object"
+      },
+      "ItemResponse_JobDTO_": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/JobDTO"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "request_id"
+        ],
+        "title": "ItemResponse[JobDTO]",
+        "type": "object"
+      },
+      "ItemResponse_PendingBackfillDTO_": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PendingBackfillDTO"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "request_id"
+        ],
+        "title": "ItemResponse[PendingBackfillDTO]",
+        "type": "object"
+      },
+      "ItemResponse_ScorecardDTO_": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ScorecardDTO"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "request_id"
+        ],
+        "title": "ItemResponse[ScorecardDTO]",
+        "type": "object"
+      },
+      "ItemResponse_SystemStatusDTO_": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SystemStatusDTO"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "request_id"
+        ],
+        "title": "ItemResponse[SystemStatusDTO]",
+        "type": "object"
+      },
+      "ItemResponse_WatchlistAddedDTO_": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/WatchlistAddedDTO"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "request_id"
+        ],
+        "title": "ItemResponse[WatchlistAddedDTO]",
+        "type": "object"
+      },
+      "JobDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "completed_steps": {
+            "title": "Completed Steps",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "current_step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Step"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "job_type": {
+            "$ref": "#/components/schemas/JobType"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          },
+          "symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symbol"
+          },
+          "total_steps": {
+            "title": "Total Steps",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "warnings": {
+            "description": "非致命告警，例如分钟线不可得（spec §7.1）",
+            "items": {},
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "job_type",
+          "status",
+          "completed_steps",
+          "total_steps",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "JobDTO",
+        "type": "object"
+      },
+      "JobStatus": {
+        "enum": [
+          "queued",
+          "running",
+          "succeeded",
+          "failed"
+        ],
+        "title": "JobStatus",
+        "type": "string"
+      },
+      "JobType": {
+        "enum": [
+          "instrument_backfill",
+          "analysis_refresh",
+          "prediction",
+          "settlement"
+        ],
+        "title": "JobType",
+        "type": "string"
+      },
+      "ListResponse_AnalogDTO_": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/AnalogDTO"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageInfo"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "page",
+          "request_id"
+        ],
+        "title": "ListResponse[AnalogDTO]",
+        "type": "object"
+      },
+      "ListResponse_AnalysisDTO_": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/AnalysisDTO"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageInfo"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "page",
+          "request_id"
+        ],
+        "title": "ListResponse[AnalysisDTO]",
+        "type": "object"
+      },
+      "ListResponse_DocumentDTO_": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentDTO"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageInfo"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "page",
+          "request_id"
+        ],
+        "title": "ListResponse[DocumentDTO]",
+        "type": "object"
+      },
+      "ListResponse_InstrumentDTO_": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/InstrumentDTO"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageInfo"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "page",
+          "request_id"
+        ],
+        "title": "ListResponse[InstrumentDTO]",
+        "type": "object"
+      },
+      "ListResponse_PredictionDTO_": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/PredictionDTO"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageInfo"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "page",
+          "request_id"
+        ],
+        "title": "ListResponse[PredictionDTO]",
+        "type": "object"
+      },
+      "ListResponse_WatchlistItemDTO_": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/WatchlistItemDTO"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageInfo"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "page",
+          "request_id"
+        ],
+        "title": "ListResponse[WatchlistItemDTO]",
+        "type": "object"
+      },
+      "ModelConnectionDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "active_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Version"
+          },
+          "better_than_baseline": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "未优于基准时前端必须显示「未优于基准」（spec §9.4）",
+            "title": "Better Than Baseline"
+          },
+          "horizon": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictionHorizon"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_prediction_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Prediction At"
+          },
+          "model_key": {
+            "title": "Model Key",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "降级/不可用原因，例如特征 PSI > 0.30（spec §9.3.1）",
+            "title": "Reason"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "degraded",
+              "unavailable"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model_key",
+          "status"
+        ],
+        "title": "ModelConnectionDTO",
+        "type": "object"
+      },
+      "PageInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "title": "PageInfo",
+        "type": "object"
+      },
+      "PendingBackfillDTO": {
+        "additionalProperties": false,
+        "description": "预测不存在但回补仍在进行时的 202 响应体（spec §7）。\n\n键名与 ``POST /watchlist`` 保持一致，前端一套渲染逻辑即可。",
+        "properties": {
+          "backfill_job": {
+            "$ref": "#/components/schemas/JobDTO"
+          }
+        },
+        "required": [
+          "backfill_job"
+        ],
+        "title": "PendingBackfillDTO",
+        "type": "object"
+      },
+      "PredictionDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "as_of": {
+            "format": "date-time",
+            "title": "As Of",
+            "type": "string"
+          },
+          "confidence": {
+            "$ref": "#/components/schemas/ConfidenceLabel"
+          },
+          "data_cutoff": {
+            "format": "date-time",
+            "title": "Data Cutoff",
+            "type": "string"
+          },
+          "disclaimer": {
+            "default": "仅供研究，不构成投资建议",
+            "title": "Disclaimer",
+            "type": "string"
+          },
+          "expected_return": {
+            "title": "Expected Return",
+            "type": "number"
+          },
+          "horizon": {
+            "$ref": "#/components/schemas/PredictionHorizon"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "model": {
+            "$ref": "#/components/schemas/PredictionModelRefDTO"
+          },
+          "probability_up": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Probability Up",
+            "type": "number"
+          },
+          "reference_price": {
+            "description": "today_close 固定为昨收（同日多次预测目标定义不变）；next_5d 为各自 as_of 时点最新有效价格（spec §7.4）",
+            "title": "Reference Price",
+            "type": "number"
+          },
+          "return_interval": {
+            "$ref": "#/components/schemas/ReturnIntervalDTO"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "target_at": {
+            "description": "结算目标时刻。next_5d 严格指向第 5 个后续**交易日**收盘（验收 §15.7）",
+            "format": "date-time",
+            "title": "Target At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "symbol",
+          "horizon",
+          "as_of",
+          "target_at",
+          "data_cutoff",
+          "reference_price",
+          "probability_up",
+          "expected_return",
+          "return_interval",
+          "confidence",
+          "model"
+        ],
+        "title": "PredictionDTO",
+        "type": "object"
+      },
+      "PredictionHorizon": {
+        "description": "预测目标（predictions.horizon / model_versions.target_horizon）。",
+        "enum": [
+          "today_close",
+          "next_5d"
+        ],
+        "title": "PredictionHorizon",
+        "type": "string"
+      },
+      "PredictionModelRefDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "better_than_baseline": {
+            "description": "当且仅当候选模型的 Brier Score 与 MAE 在同一测试窗口上均严格优于恒定概率与历史均值基准（spec §9.3.1）。由训练侧写入 model_versions.validation_metrics，API 只读取，不重算",
+            "title": "Better Than Baseline",
+            "type": "boolean"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "version",
+          "better_than_baseline"
+        ],
+        "title": "PredictionModelRefDTO",
+        "type": "object"
+      },
+      "PredictionResponse": {
+        "additionalProperties": false,
+        "description": "spec §7.4 的响应是裸对象；§7 要求所有响应带 request_id，故追加该字段。",
+        "properties": {
+          "as_of": {
+            "format": "date-time",
+            "title": "As Of",
+            "type": "string"
+          },
+          "confidence": {
+            "$ref": "#/components/schemas/ConfidenceLabel"
+          },
+          "data_cutoff": {
+            "format": "date-time",
+            "title": "Data Cutoff",
+            "type": "string"
+          },
+          "disclaimer": {
+            "default": "仅供研究，不构成投资建议",
+            "title": "Disclaimer",
+            "type": "string"
+          },
+          "expected_return": {
+            "title": "Expected Return",
+            "type": "number"
+          },
+          "horizon": {
+            "$ref": "#/components/schemas/PredictionHorizon"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "model": {
+            "$ref": "#/components/schemas/PredictionModelRefDTO"
+          },
+          "probability_up": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Probability Up",
+            "type": "number"
+          },
+          "reference_price": {
+            "description": "today_close 固定为昨收（同日多次预测目标定义不变）；next_5d 为各自 as_of 时点最新有效价格（spec §7.4）",
+            "title": "Reference Price",
+            "type": "number"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "return_interval": {
+            "$ref": "#/components/schemas/ReturnIntervalDTO"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "target_at": {
+            "description": "结算目标时刻。next_5d 严格指向第 5 个后续**交易日**收盘（验收 §15.7）",
+            "format": "date-time",
+            "title": "Target At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "symbol",
+          "horizon",
+          "as_of",
+          "target_at",
+          "data_cutoff",
+          "reference_price",
+          "probability_up",
+          "expected_return",
+          "return_interval",
+          "confidence",
+          "model",
+          "request_id"
+        ],
+        "title": "PredictionResponse",
+        "type": "object"
+      },
+      "QuoteDTO": {
+        "additionalProperties": false,
+        "description": "近实时行情。\n\nspec §7.2 的示例只列出 price/change_percent/observed_at/source/freshness；\n这里额外带上 F2 明确要求的**成交量与量比**，以及 stale 时必须出现的 ``age_seconds``。",
+        "properties": {
+          "age_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "行情已过期多少秒。仅在 freshness=stale 时出现（spec §7）；fresh 时为 null",
+            "title": "Age Seconds"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "change_percent": {
+            "description": "price / previous_close - 1",
+            "title": "Change Percent",
+            "type": "number"
+          },
+          "freshness": {
+            "$ref": "#/components/schemas/Freshness"
+          },
+          "high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "High"
+          },
+          "low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Low"
+          },
+          "observed_at": {
+            "description": "数据源观测时间（Asia/Shanghai）",
+            "format": "date-time",
+            "title": "Observed At",
+            "type": "string"
+          },
+          "open": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Open"
+          },
+          "previous_close": {
+            "title": "Previous Close",
+            "type": "number"
+          },
+          "price": {
+            "title": "Price",
+            "type": "number"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "volume": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Volume"
+          },
+          "volume_ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "量比（F2）",
+            "title": "Volume Ratio"
+          }
+        },
+        "required": [
+          "symbol",
+          "price",
+          "previous_close",
+          "change_percent",
+          "observed_at",
+          "source",
+          "freshness"
+        ],
+        "title": "QuoteDTO",
+        "type": "object"
+      },
+      "RelativeStrengthDTO": {
+        "additionalProperties": false,
+        "description": "相对大盘强弱（spec §7.2）。基准行情缺失时整个对象为 null，不编造 0。",
+        "properties": {
+          "benchmark": {
+            "title": "Benchmark",
+            "type": "string"
+          },
+          "benchmark_change_percent": {
+            "title": "Benchmark Change Percent",
+            "type": "number"
+          },
+          "stock_change_percent": {
+            "title": "Stock Change Percent",
+            "type": "number"
+          }
+        },
+        "required": [
+          "benchmark",
+          "stock_change_percent",
+          "benchmark_change_percent"
+        ],
+        "title": "RelativeStrengthDTO",
+        "type": "object"
+      },
+      "ReorderWatchlistRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "symbols": {
+            "description": "必须是当前自选股的一个全排列；缺项/多项/重复一律 400 INVALID_ARGUMENT",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Symbols",
+            "type": "array"
+          }
+        },
+        "required": [
+          "symbols"
+        ],
+        "title": "ReorderWatchlistRequest",
+        "type": "object"
+      },
+      "ReturnIntervalDTO": {
+        "additionalProperties": false,
+        "description": "20%/80% 分位区间（spec §3.3）。",
+        "properties": {
+          "p20": {
+            "title": "P20",
+            "type": "number"
+          },
+          "p80": {
+            "title": "P80",
+            "type": "number"
+          }
+        },
+        "required": [
+          "p20",
+          "p80"
+        ],
+        "title": "ReturnIntervalDTO",
+        "type": "object"
+      },
+      "ScorecardDTO": {
+        "additionalProperties": false,
+        "description": "预测成绩单（spec §7.4）。\n\n``settled_count + pending_count == eligible_count``；\n尚未到目标时间的预测**不进入分母**。",
+        "properties": {
+          "baseline_brier_score": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Baseline Brier Score",
+            "type": "number"
+          },
+          "baseline_direction_accuracy": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Baseline Direction Accuracy",
+            "type": "number"
+          },
+          "baseline_mae": {
+            "minimum": 0.0,
+            "title": "Baseline Mae",
+            "type": "number"
+          },
+          "better_than_baseline": {
+            "title": "Better Than Baseline",
+            "type": "boolean"
+          },
+          "brier_score": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Brier Score",
+            "type": "number"
+          },
+          "calculated_at": {
+            "format": "date-time",
+            "title": "Calculated At",
+            "type": "string"
+          },
+          "direction_accuracy": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Direction Accuracy",
+            "type": "number"
+          },
+          "eligible_count": {
+            "description": "目标时间已到的预测数",
+            "minimum": 0.0,
+            "title": "Eligible Count",
+            "type": "integer"
+          },
+          "mae": {
+            "minimum": 0.0,
+            "title": "Mae",
+            "type": "number"
+          },
+          "model_key": {
+            "title": "Model Key",
+            "type": "string"
+          },
+          "pending_count": {
+            "minimum": 0.0,
+            "title": "Pending Count",
+            "type": "integer"
+          },
+          "settled_count": {
+            "minimum": 0.0,
+            "title": "Settled Count",
+            "type": "integer"
+          },
+          "window": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "const": "all",
+                "type": "string"
+              }
+            ],
+            "title": "Window"
+          }
+        },
+        "required": [
+          "model_key",
+          "window",
+          "eligible_count",
+          "settled_count",
+          "pending_count",
+          "direction_accuracy",
+          "mae",
+          "brier_score",
+          "baseline_direction_accuracy",
+          "baseline_mae",
+          "baseline_brier_score",
+          "better_than_baseline",
+          "calculated_at"
+        ],
+        "title": "ScorecardDTO",
+        "type": "object"
+      },
+      "SnapshotResponse": {
+        "additionalProperties": false,
+        "description": "spec §7.2 的响应是**裸对象**（不带 data 包裹）；§7 又要求所有响应带 request_id，\n因此在裸对象上追加 request_id 字段（同时也在 ``X-Request-Id`` 响应头返回）。",
+        "properties": {
+          "is_current_universe_member": {
+            "description": "false ⇒ 前端展示「已调出沪深300」（spec §3.1）",
+            "title": "Is Current Universe Member",
+            "type": "boolean"
+          },
+          "latest_anomaly_analysis_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Anomaly Analysis Id"
+          },
+          "latest_predictions": {
+            "description": "各 horizon 的最新预测 id；无预测时为空数组",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Latest Predictions",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "quote": {
+            "$ref": "#/components/schemas/QuoteDTO"
+          },
+          "relative_strength": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RelativeStrengthDTO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "name",
+          "quote",
+          "is_current_universe_member",
+          "request_id"
+        ],
+        "title": "SnapshotResponse",
+        "type": "object"
+      },
+      "SystemStatusDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "agent": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgentConnectionDTO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelConnectionDTO"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/DataSourceDTO"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sources",
+          "models"
+        ],
+        "title": "SystemStatusDTO",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "WatchlistAddedDTO": {
+        "additionalProperties": false,
+        "description": "``POST /watchlist`` 的 data 体（spec §7.1）。",
+        "properties": {
+          "backfill_job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobDTO"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "首次添加时返回回补作业（HTTP 202）；已完成过回补则为 null（HTTP 201）"
+          },
+          "watchlist_item": {
+            "$ref": "#/components/schemas/WatchlistItemDTO"
+          }
+        },
+        "required": [
+          "watchlist_item"
+        ],
+        "title": "WatchlistAddedDTO",
+        "type": "object"
+      },
+      "WatchlistItemDTO": {
+        "additionalProperties": false,
+        "description": "自选股条目。\n\nspec §7.1 的 POST 示例只回 ``{\"symbol\", \"display_order\"}``；\n这里是它的超集：首页自选股表格需要 name / 行情 / 新鲜度，而\n**前端不得自行计算数据新鲜度**（spec §5.1），所以必须由 API 提供。",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "display_order": {
+            "title": "Display Order",
+            "type": "integer"
+          },
+          "is_current_universe_member": {
+            "description": "false ⇒ 「已调出沪深300」：保留展示，停止新预测（spec §3.1）",
+            "title": "Is Current Universe Member",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuoteDTO"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "最新行情；从未取得行情时为 null（不编造默认值）"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "name",
+          "display_order",
+          "created_at",
+          "is_current_universe_member"
+        ],
+        "title": "WatchlistItemDTO",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "个人使用、仅沪深300成分股、OpenBB 统一数据网关、免费近实时数据、无自动交易。\n\n所有响应都带 request_id；列表使用游标分页（limit 默认 20、最大 100）。\n预测仅供研究，不构成投资建议。",
+    "title": "A股 AI 研究助手 API",
+    "version": "1.1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/instruments/search": {
+      "get": {
+        "operationId": "search_instruments_api_v1_instruments_search_get",
+        "parameters": [
+          {
+            "description": "代码或公司名称",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "description": "代码或公司名称",
+              "maxLength": 80,
+              "minLength": 1,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "description": "MVP 只支持 CSI300",
+            "in": "query",
+            "name": "universe",
+            "required": false,
+            "schema": {
+              "const": "CSI300",
+              "default": "CSI300",
+              "description": "MVP 只支持 CSI300",
+              "title": "Universe",
+              "type": "string"
+            }
+          },
+          {
+            "description": "默认 20，最大 100",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 100,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": 20,
+              "description": "默认 20，最大 100",
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListResponse_InstrumentDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INVALID_ARGUMENT：代码、分页或时间参数无效"
+          },
+          "424": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "PROVIDER_UNAVAILABLE：上游数据源失败且无可用结果"
+          }
+        },
+        "summary": "在当前沪深300成分中搜索（代码或名称）",
+        "tags": [
+          "instruments"
+        ]
+      }
+    },
+    "/api/v1/jobs/{job_id}": {
+      "get": {
+        "operationId": "get_job_api_v1_jobs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemResponse_JobDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INVALID_ARGUMENT：代码、分页或时间参数无效"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INSTRUMENT_NOT_FOUND：证券不存在或不在 MVP 市场范围"
+          }
+        },
+        "summary": "查询作业进度",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/v1/models/{model_key}/scorecard": {
+      "get": {
+        "operationId": "get_scorecard_api_v1_models__model_key__scorecard_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_key",
+            "required": true,
+            "schema": {
+              "title": "Model Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "enum": [
+                "20",
+                "100",
+                "all"
+              ],
+              "title": "Window",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemResponse_ScorecardDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INVALID_ARGUMENT：代码、分页或时间参数无效"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INSUFFICIENT_DATA：历史样本不足，无法生成结果"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "MODEL_UNAVAILABLE：没有可用模型版本"
+          }
+        },
+        "summary": "模型成绩单（settled + pending = eligible；未到目标时间的预测不进分母）",
+        "tags": [
+          "predictions"
+        ]
+      }
+    },
+    "/api/v1/stocks/{symbol}/analogs": {
+      "get": {
+        "operationId": "list_analogs_api_v1_stocks__symbol__analogs_get",
+        "parameters": [
+          {
+            "description": "6 位 A 股代码，例如 600519",
+            "in": "path",
+            "name": "symbol",
+            "required": true,
+            "schema": {
+              "description": "6 位 A 股代码，例如 600519",
+              "examples": [
+                "600519"
+              ],
+              "pattern": "^\\d{6}$",
+              "title": "Symbol",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "horizon",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/PredictionHorizon",
+              "default": "next_5d"
+            }
+          },
+          {
+            "description": "默认 20，最大 100",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 100,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": 10,
+              "description": "默认 20，最大 100",
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListResponse_AnalogDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INVALID_ARGUMENT：代码、分页或时间参数无效"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INSTRUMENT_NOT_FOUND：证券不存在或不在 MVP 市场范围"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INSUFFICIENT_DATA：历史样本不足，无法生成结果"
+          }
+        },
+        "summary": "历史相似行情（有效候选 < 30 时关闭该功能 ⇒ 422）",
+        "tags": [
+          "stocks"
+        ]
+      }
+    },
+    "/api/v1/stocks/{symbol}/analyses": {
+      "get": {
+        "operationId": "list_analyses_api_v1_stocks__symbol__analyses_get",
+        "parameters": [
+          {
+            "description": "6 位 A 股代码，例如 600519",
+            "in": "path",
+            "name": "symbol",
+            "required": true,
+            "schema": {
+              "description": "6 位 A 股代码，例如 600519",
+              "examples": [
+                "600519"
+              ],
+              "pattern": "^\\d{6}$",
+              "title": "Symbol",
+              "type": "string"
+            }
+          },
+          {
+            "description": "document | anomaly | daily_brief",
+            "in": "query",
+            "name": "type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/AnalysisType"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "document | anomaly | daily_brief",
+              "title": "Type"
+            }
+          },
+          {
+            "description": "无填充 Base64URL 游标",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "无填充 Base64URL 游标",
+              "title": "Cursor"
+            }
+          },
+          {
+            "description": "默认 20，最大 100",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 100,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "默认 20，最大 100",
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListResponse_AnalysisDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INVALID_ARGUMENT：代码、分页或时间参数无效"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INSTRUMENT_NOT_FOUND：证券不存在或不在 MVP 市场范围"
+          }
+        },
+        "summary": "AI 解释（证据整条展开，绝不返回部分证据）",
+        "tags": [
+          "stocks"
+        ]
+      }
+    },
+    "/api/v1/stocks/{symbol}/analyses/refresh": {
+      "post": {
+        "operationId": "refresh_analyses_api_v1_stocks__symbol__analyses_refresh_post",
+        "parameters": [
+          {
+            "description": "6 位 A 股代码，例如 600519",
+            "in": "path",
+            "name": "symbol",
+            "required": true,
+            "schema": {
+              "description": "6 位 A 股代码，例如 600519",
+              "examples": [
+                "600519"
+              ],
+              "pattern": "^\\d{6}$",
+              "title": "Symbol",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemResponse_JobDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INVALID_ARGUMENT：代码、分页或时间参数无效"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INSTRUMENT_NOT_FOUND：证券不存在或不在 MVP 市场范围"
+          }
+        },
+        "summary": "触发解释刷新（登记 analysis_refresh 作业，由 worker 执行）",
+        "tags": [
+          "stocks"
+        ]
+      }
+    },
+    "/api/v1/stocks/{symbol}/documents": {
+      "get": {
+        "operationId": "list_documents_api_v1_stocks__symbol__documents_get",
+        "parameters": [
+          {
+            "description": "6 位 A 股代码，例如 600519",
+            "in": "path",
+            "name": "symbol",
+            "required": true,
+            "schema": {
+              "description": "6 位 A 股代码，例如 600519",
+              "examples": [
+                "600519"
+              ],
+              "pattern": "^\\d{6}$",
+              "title": "Symbol",
+              "type": "string"
+            }
+          },
+          {
+            "description": "announcement | news",
+            "in": "query",
+            "name": "type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/DocumentType"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "announcement | news",
+              "title": "Type"
+            }
+          },
+          {
+            "description": "无填充 Base64URL 游标",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "无填充 Base64URL 游标",
+              "title": "Cursor"
+            }
+          },
+          {
+            "description": "默认 20，最大 100",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 100,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "默认 20，最大 100",
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListResponse_DocumentDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INVALID_ARGUMENT：代码、分页或时间参数无效"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INSTRUMENT_NOT_FOUND：证券不存在或不在 MVP 市场范围"
+          }
+        },
+        "summary": "公告与新闻（按内容哈希去重）",
+        "tags": [
+          "stocks"
+        ]
+      }
+    },
+    "/api/v1/stocks/{symbol}/predictions/history": {
+      "get": {
+        "operationId": "get_prediction_history_api_v1_stocks__symbol__predictions_history_get",
+        "parameters": [
+          {
+            "description": "6 位 A 股代码，例如 600519",
+            "in": "path",
+            "name": "symbol",
+            "required": true,
+            "schema": {
+              "description": "6 位 A 股代码，例如 600519",
+              "examples": [
+                "600519"
+              ],
+              "pattern": "^\\d{6}$",
+              "title": "Symbol",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "horizon",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/PredictionHorizon",
+              "default": "next_5d"
+            }
+          },
+          {
+            "description": "无填充 Base64URL 游标",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "无填充 Base64URL 游标",
+              "title": "Cursor"
+            }
+          },
+          {
+            "description": "默认 20，最大 100",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 100,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "默认 20，最大 100",
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListResponse_PredictionDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INVALID_ARGUMENT：代码、分页或时间参数无效"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INSTRUMENT_NOT_FOUND：证券不存在或不在 MVP 市场范围"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "MODEL_UNAVAILABLE：没有可用模型版本"
+          }
+        },
+        "summary": "历史预测（只追加，永不覆盖）",
+        "tags": [
+          "predictions"
+        ]
+      }
+    },
+    "/api/v1/stocks/{symbol}/predictions/latest": {
+      "get": {
+        "operationId": "get_latest_prediction_api_v1_stocks__symbol__predictions_latest_get",
+        "parameters": [
+          {
+            "description": "6 位 A 股代码，例如 600519",
+            "in": "path",
+            "name": "symbol",
+            "required": true,
+            "schema": {
+              "description": "6 位 A 股代码，例如 600519",
+              "examples": [
+                "600519"
+              ],
+              "pattern": "^\\d{6}$",
+              "title": "Symbol",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "horizon",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/PredictionHorizon",
+              "default": "next_5d"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PredictionResponse"
+                }
+              }
+            },
+            "description": "最新预测"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemResponse_PendingBackfillDTO_"
+                }
+              }
+            },
+            "description": "预测不存在但回补仍在进行中"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INVALID_ARGUMENT：代码、分页或时间参数无效"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INSTRUMENT_NOT_FOUND：证券不存在或不在 MVP 市场范围"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INSUFFICIENT_DATA：历史样本不足，无法生成结果"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "MODEL_UNAVAILABLE：没有可用模型版本"
+          }
+        },
+        "summary": "最新预测（今日预测 09:45 前不可用）",
+        "tags": [
+          "predictions"
+        ]
+      }
+    },
+    "/api/v1/stocks/{symbol}/snapshot": {
+      "get": {
+        "description": "行情过期但仍有最后值 ⇒ 200 + freshness=stale + age_seconds；\n从未取得行情 ⇒ 424 PROVIDER_UNAVAILABLE。",
+        "operationId": "get_snapshot_api_v1_stocks__symbol__snapshot_get",
+        "parameters": [
+          {
+            "description": "6 位 A 股代码，例如 600519",
+            "in": "path",
+            "name": "symbol",
+            "required": true,
+            "schema": {
+              "description": "6 位 A 股代码，例如 600519",
+              "examples": [
+                "600519"
+              ],
+              "pattern": "^\\d{6}$",
+              "title": "Symbol",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INVALID_ARGUMENT：代码、分页或时间参数无效"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INSTRUMENT_NOT_FOUND：证券不存在或不在 MVP 市场范围"
+          },
+          "424": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "PROVIDER_UNAVAILABLE：上游数据源失败且无可用结果"
+          }
+        },
+        "summary": "股票快照（行情、新鲜度、相对强弱、最新异动与预测）",
+        "tags": [
+          "stocks"
+        ]
+      }
+    },
+    "/api/v1/system/status": {
+      "get": {
+        "operationId": "get_system_status_api_v1_system_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemResponse_SystemStatusDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "数据源、模型与 Agent 连接状态",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/v1/universes/CSI300/instruments": {
+      "get": {
+        "operationId": "list_csi300_instruments_api_v1_universes_CSI300_instruments_get",
+        "parameters": [
+          {
+            "description": "缺省为查询日；返回该日期真实有效的成分",
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "缺省为查询日；返回该日期真实有效的成分",
+              "title": "As Of"
+            }
+          },
+          {
+            "description": "无填充 Base64URL 游标",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "无填充 Base64URL 游标",
+              "title": "Cursor"
+            }
+          },
+          {
+            "description": "默认 20，最大 100",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 100,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "默认 20，最大 100",
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListResponse_InstrumentDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INVALID_ARGUMENT：代码、分页或时间参数无效"
+          },
+          "424": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "PROVIDER_UNAVAILABLE：上游数据源失败且无可用结果"
+          }
+        },
+        "summary": "指定日期有效的沪深300成分",
+        "tags": [
+          "universes"
+        ]
+      }
+    },
+    "/api/v1/watchlist": {
+      "get": {
+        "operationId": "get_watchlist_api_v1_watchlist_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListResponse_WatchlistItemDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "自选股列表（含最新行情与新鲜度）",
+        "tags": [
+          "watchlist"
+        ]
+      },
+      "post": {
+        "operationId": "add_watchlist_item_api_v1_watchlist_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddWatchlistRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemResponse_WatchlistAddedDTO_"
+                }
+              }
+            },
+            "description": "此前已成功回补过该股票，无需新作业（backfill_job=null）"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemResponse_WatchlistAddedDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INVALID_ARGUMENT：代码、分页或时间参数无效"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INSTRUMENT_NOT_FOUND：证券不存在或不在 MVP 市场范围"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "NOT_CURRENT_UNIVERSE_MEMBER / DUPLICATE_WATCHLIST_ITEM"
+          }
+        },
+        "summary": "添加自选股（首次添加返回 202 + 回补任务）",
+        "tags": [
+          "watchlist"
+        ]
+      }
+    },
+    "/api/v1/watchlist/order": {
+      "patch": {
+        "operationId": "reorder_watchlist_api_v1_watchlist_order_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderWatchlistRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListResponse_WatchlistItemDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INVALID_ARGUMENT：代码、分页或时间参数无效"
+          }
+        },
+        "summary": "重排自选股（symbols 必须是当前自选股的全排列）",
+        "tags": [
+          "watchlist"
+        ]
+      }
+    },
+    "/api/v1/watchlist/{symbol}": {
+      "delete": {
+        "operationId": "delete_watchlist_item_api_v1_watchlist__symbol__delete",
+        "parameters": [
+          {
+            "description": "6 位 A 股代码，例如 600519",
+            "in": "path",
+            "name": "symbol",
+            "required": true,
+            "schema": {
+              "description": "6 位 A 股代码，例如 600519",
+              "examples": [
+                "600519"
+              ],
+              "pattern": "^\\d{6}$",
+              "title": "Symbol",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INVALID_ARGUMENT：代码、分页或时间参数无效"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INSTRUMENT_NOT_FOUND：证券不存在或不在 MVP 市场范围"
+          }
+        },
+        "summary": "删除自选股",
+        "tags": [
+          "watchlist"
+        ]
+      }
+    }
+  }
+}

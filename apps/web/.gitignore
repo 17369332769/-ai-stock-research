@@ -1,0 +1,10 @@
+# Next.js
+.next/
+out/
+next-env.d.ts.bak
+
+# 测试产物
+playwright-report/
+test-results/
+coverage/
+*.tsbuildinfo

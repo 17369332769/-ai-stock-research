@@ -1,0 +1,78 @@
+import { DIRECTION_LABELS, EVENT_HORIZON_LABELS, NO_VERIFIABLE_CAUSE_TEXT } from '@/lib/constants';
+import { formatDateTime } from '@/lib/format';
+import type { AnalysisDTO } from '@/lib/api/types';
+import { EvidenceList } from './EvidenceList';
+
+export interface AnalysisCardProps {
+  analysis: AnalysisDTO;
+}
+
+const DIRECTION_TONE: Record<string, string> = {
+  positive: 'up',
+  negative: 'down',
+  neutral: 'flat',
+  unknown: 'flat',
+};
+
+/**
+ * AI 结论卡片（异动摘要 / 文档解读）。
+ *
+ * 约束：
+ *  - 无证据时 direction 必须是 unknown，摘要含固定文本"未找到可验证事件原因"（spec §7.3）。
+ *    此处不改写 API 文案，只在缺失时补一行提示，且证据区展示"原因未知"。
+ *  - Agent 的 confidence 是 0-1 数值（analyses.confidence），与预测的 low/medium/high 不同。
+ */
+export function AnalysisCard({ analysis }: AnalysisCardProps) {
+  const direction = analysis.direction ?? 'unknown';
+  const horizon = analysis.horizon ?? 'unknown';
+  const hasEvidence = analysis.evidence.length > 0;
+  const summaryHasFixedText = analysis.summary.includes(NO_VERIFIABLE_CAUSE_TEXT);
+
+  return (
+    <article className="analysis" data-testid="analysis-card" data-analysis-type={analysis.analysis_type}>
+      <div className="analysis__head">
+        <span
+          className={`badge badge--${DIRECTION_TONE[direction] ?? 'flat'}`}
+          data-testid="analysis-direction"
+        >
+          影响方向：{DIRECTION_LABELS[direction]}
+        </span>
+        <span className="badge badge--neutral" data-testid="analysis-horizon">
+          期限：{EVENT_HORIZON_LABELS[horizon]}
+        </span>
+        <span className="analysis__cutoff" data-testid="analysis-cutoff">
+          数据截止 {formatDateTime(analysis.data_cutoff)}
+        </span>
+      </div>
+
+      <p className="analysis__summary" data-testid="analysis-summary">
+        {analysis.summary}
+      </p>
+
+      {!hasEvidence && !summaryHasFixedText ? (
+        <p className="analysis__no-cause" data-testid="analysis-no-cause">
+          {NO_VERIFIABLE_CAUSE_TEXT}
+        </p>
+      ) : null}
+
+      {analysis.risk_flags && analysis.risk_flags.length > 0 ? (
+        <ul className="analysis__risks" data-testid="analysis-risk-flags">
+          {analysis.risk_flags.map((flag) => (
+            <li key={flag}>风险提示：{flag}</li>
+          ))}
+        </ul>
+      ) : null}
+
+      <div className="analysis__evidence">
+        <h4 className="analysis__evidence-title">证据</h4>
+        <EvidenceList evidence={analysis.evidence} />
+      </div>
+
+      {analysis.model_name ? (
+        <footer className="analysis__footer" data-testid="analysis-model">
+          分析模型：{analysis.model_provider ?? '未知供应商'} / {analysis.model_name}
+        </footer>
+      ) : null}
+    </article>
+  );
+}

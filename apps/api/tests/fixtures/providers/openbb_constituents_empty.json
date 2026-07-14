@@ -1,0 +1,11 @@
+{
+  "results": [],
+  "provider": "csi300",
+  "warnings": [],
+  "chart": null,
+  "extra": {
+    "metadata": {
+      "arguments": {}
+    }
+  }
+}

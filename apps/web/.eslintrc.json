@@ -1,0 +1,25 @@
+{
+  "extends": ["next/core-web-vitals"],
+  "ignorePatterns": [
+    "node_modules/",
+    ".next/",
+    "playwright-report/",
+    "test-results/",
+    "next-env.d.ts"
+  ],
+  "rules": {
+    "no-restricted-globals": [
+      "error",
+      {
+        "name": "fetch",
+        "message": "请使用 lib/api/client.ts 的封装（统一错误契约与 request_id）。"
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["lib/api/client.ts", "e2e/**/*.ts", "tests/**/*.ts", "tests/**/*.tsx"],
+      "rules": { "no-restricted-globals": "off" }
+    }
+  ]
+}

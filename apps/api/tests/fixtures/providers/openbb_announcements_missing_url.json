@@ -1,0 +1,39 @@
+{
+  "results": [
+    {
+      "date": "2026-07-14T08:30:00+08:00",
+      "title": "贵州茅台酒股份有限公司2026年半年度业绩预告",
+      "text": null,
+      "symbols": "600519",
+      "source": "cninfo",
+      "document_type": "announcement",
+      "announcement_id": "1220001111",
+      "org_id": "gssh0600519",
+      "announcement_type": "业绩预告",
+      "sec_name": "贵州茅台",
+      "detail_url": "http://www.cninfo.com.cn/new/disclosure/detail?stockCode=600519&announcementId=1220001111&orgId=gssh0600519&announcementTime=2026-07-14"
+    },
+    {
+      "date": "2026-07-12T17:05:00+08:00",
+      "title": "关于召开2026年第一次临时股东大会的通知",
+      "text": null,
+      "url": "http://static.cninfo.com.cn/finalpage/2026-07-12/1220000999.PDF",
+      "symbols": "600519",
+      "source": "cninfo",
+      "document_type": "announcement",
+      "announcement_id": "1220000999",
+      "org_id": "gssh0600519",
+      "announcement_type": "股东大会",
+      "sec_name": "贵州茅台",
+      "detail_url": "http://www.cninfo.com.cn/new/disclosure/detail?stockCode=600519&announcementId=1220000999&orgId=gssh0600519&announcementTime=2026-07-12"
+    }
+  ],
+  "provider": "cn_disclosure",
+  "warnings": [],
+  "chart": null,
+  "extra": {
+    "metadata": {
+      "arguments": {}
+    }
+  }
+}

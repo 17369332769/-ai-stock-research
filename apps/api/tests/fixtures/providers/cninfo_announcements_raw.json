@@ -1,0 +1,33 @@
+{
+  "totalAnnouncement": 2,
+  "totalRecordNum": 2,
+  "hasMore": false,
+  "announcements": [
+    {
+      "announcementId": "1220001111",
+      "announcementTitle": "贵州茅台酒股份有限公司2026年半年度业绩预告",
+      "announcementTime": 1783989000000,
+      "adjunctUrl": "finalpage/2026-07-14/1220001111.PDF",
+      "adjunctSize": 312,
+      "adjunctType": "PDF",
+      "secCode": "600519",
+      "secName": "贵州茅台",
+      "orgId": "gssh0600519",
+      "announcementType": "业绩预告",
+      "columnId": "sse_szsh"
+    },
+    {
+      "announcementId": "1220000999",
+      "announcementTitle": "关于召开2026年第一次临时股东大会的通知",
+      "announcementTime": 1783847100000,
+      "adjunctUrl": "finalpage/2026-07-12/1220000999.PDF",
+      "adjunctSize": 148,
+      "adjunctType": "PDF",
+      "secCode": "600519",
+      "secName": "贵州茅台",
+      "orgId": "gssh0600519",
+      "announcementType": "股东大会",
+      "columnId": "sse_szsh"
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+# 一周模型（spec §9.1：第 5 个后续交易日收盘价 / 预测参考价 - 1）
+#
+# "第 5 个后续交易日" 只有一个实现：apps/api/app/core/trading_calendar.nth_trading_day_after。
+# embargo = 5 个交易日：训练标签要看 t+5 的价格，训练段末尾必须离验证/测试段至少 5 个交易日，
+# 否则训练标签已经"看过"验证期的价格（见 training/splits.py）。
+
+model_key: a_share_5d_lightgbm
+target_horizon: next_5d
+feature_set_version: v1
+
+test_fraction: 0.20
+min_train_sessions: 250
+walk_forward_folds: 5
+validation_sessions: 60
+
+lower_quantile: 0.20
+upper_quantile: 0.80
+
+num_boost_round: 400
+early_stopping_rounds: 50
+
+common_params:
+  learning_rate: 0.03
+  num_leaves: 31
+  max_depth: 6
+  min_data_in_leaf: 100
+  feature_fraction: 0.8
+  bagging_fraction: 0.8
+  bagging_freq: 1
+  lambda_l2: 1.0
+  verbosity: -1
+  num_threads: 4
+  seed: 20260714
+  deterministic: true
+
+regressor_params:
+  objective: regression
+  metric: l1
+
+classifier_params:
+  objective: binary
+  metric: binary_logloss

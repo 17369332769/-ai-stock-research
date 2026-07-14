@@ -1,0 +1,211 @@
+# A股 AI 研究助手 —— 本地单机部署（spec §4.1 / §14.3 / §19.1）
+#
+# 硬约束：
+#   * 所有端口只绑 127.0.0.1（spec §14.3）。容器内部监听 0.0.0.0 是容器网络地址，
+#     宿主机的暴露面仍然只有回环口。
+#   * 迁移（migrate 服务）必须在 api / worker / web 启动前跑完；失败则新版本根本不启动（spec §19.1）。
+#   * 镜像用不可变标签 app-{git_sha}；GIT_SHA 为空时只能得到本机 dev 标签，
+#     scripts/release.sh 会直接拒绝发布（spec §19.1"没有提交SHA时发布脚本必须失败"）。
+#   * 模型产物 artifacts/models 只读挂载到 /models（spec §9.3.1 artifact_uri = file:///models/...）。
+#   * 密钥只从环境变量 / ../.env 注入，不写进镜像、不写进数据库和日志（spec §14.3）。
+#
+# OpenBB 采用 AGPL-3.0：本 compose 只供本地个人使用，不得公开托管（spec §4.2）。
+
+name: ai-stock-research
+
+x-python-common: &python-common
+  env_file:
+    - path: ../.env
+      required: false
+  restart: unless-stopped
+  labels:
+    com.ai-stock-research.app-tag: "app-${GIT_SHA:-dev}"
+    com.ai-stock-research.model-tag: "model-${MODEL_VERSION:-none}"
+
+services:
+  # ── PostgreSQL 16（spec §4.1）─────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:-app}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-change_me_locally}"
+      POSTGRES_DB: "${POSTGRES_DB:-app}"
+      TZ: Asia/Shanghai
+      PGTZ: Asia/Shanghai
+    ports:
+      - "127.0.0.1:5432:5432" # 只绑回环：本机 psql / pg_dump 可用，外网不可达
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  # ── OpenBB Platform 内部 REST（spec §4.2：业务代码只允许经此访问外部数据）────────────
+  openbb:
+    <<: *python-common
+    image: "ai-stock-research/openbb:app-${GIT_SHA:-dev}"
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.openbb
+    ports:
+      - "127.0.0.1:6900:6900" # 仅供本机排障；api/worker 走容器网络 http://openbb:6900
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import socket; socket.create_connection(('127.0.0.1', 6900), 3).close()"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  # ── 数据库迁移：一次性任务，成功后才允许 api/worker/web 启动（spec §19.1）────────────
+  migrate:
+    <<: *python-common
+    image: "ai-stock-research/api:app-${GIT_SHA:-dev}"
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+    restart: "no"
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── FastAPI（spec §4.1）──────────────────────────────────────────────────────────────
+  api:
+    <<: *python-common
+    image: "ai-stock-research/api:app-${GIT_SHA:-dev}"
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+    command:
+      ["uvicorn", "apps.api.app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+    environment:
+      MODEL_ARTIFACT_ROOT: /models
+      WORKER_STATE_DIR: /state
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ../artifacts/models:/models:ro # 模型产物只读（spec §9.3.1）
+      - worker_state:/state:ro # worker 健康快照只读：/settings/data-sources 展示失败源与最后成功时间
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      openbb:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import socket; socket.create_connection(('127.0.0.1', 8000), 3).close()"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # ── APScheduler worker：独立进程，后台采集不阻塞 API（spec §14.1 / §4.1）─────────────
+  worker:
+    <<: *python-common
+    image: "ai-stock-research/worker:app-${GIT_SHA:-dev}"
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.worker
+    environment:
+      MODEL_ARTIFACT_ROOT: /models
+      WORKER_STATE_DIR: /state
+    volumes:
+      - ../artifacts/models:/models:ro
+      - worker_state:/state # 只有 worker 可写；api 侧是 :ro
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      openbb:
+        condition: service_healthy
+    healthcheck:
+      # 心跳每 60 秒刷新健康快照；超过 240 秒没更新即判定调度器卡死
+      test:
+        - CMD
+        - python
+        - -c
+        - "import json,datetime,sys; d=json.load(open('/state/worker_health.json')); g=datetime.datetime.fromisoformat(d['generated_at']); sys.exit(0 if (datetime.datetime.now(g.tzinfo)-g).total_seconds() < 240 else 1)"
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+  # ── Next.js（spec §4.1）─────────────────────────────────────────────────────────────
+  web:
+    image: "ai-stock-research/web:app-${GIT_SHA:-dev}"
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.web
+      args:
+        NEXT_PUBLIC_API_BASE_URL: "${NEXT_PUBLIC_API_BASE_URL:-http://127.0.0.1:8000/api/v1}"
+    restart: unless-stopped
+    labels:
+      com.ai-stock-research.app-tag: "app-${GIT_SHA:-dev}"
+    environment:
+      TZ: Asia/Shanghai
+      NODE_ENV: production
+      # 浏览器在宿主机上执行请求，因此指向宿主机回环口，而不是容器名
+      NEXT_PUBLIC_API_BASE_URL: "${NEXT_PUBLIC_API_BASE_URL:-http://127.0.0.1:8000/api/v1}"
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('net').connect(3000,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ── 每日数据库备份，保留 7 天（spec §14.2）───────────────────────────────────────────
+  # 复用 postgres:16-alpine（pg_dump 必须与服务端同大版本），不额外拉镜像。
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      TZ: Asia/Shanghai
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: "${POSTGRES_USER:-app}"
+      PGPASSWORD: "${POSTGRES_PASSWORD:-change_me_locally}"
+      PGDATABASE: "${POSTGRES_DB:-app}"
+      BACKUP_DIR: /backups
+      BACKUP_RETENTION_DAYS: "7"
+      BACKUP_AT: "02:30" # 收盘且日线入库之后
+    entrypoint: ["/bin/sh", "/scripts/backup_loop.sh"]
+    volumes:
+      - ../scripts:/scripts:ro
+      - ../backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  worker_state:

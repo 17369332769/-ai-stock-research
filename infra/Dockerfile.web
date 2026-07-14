@@ -1,0 +1,37 @@
+# Next.js 前端（spec §4.1）。npm workspaces：仓库根有 package.json + apps/web。
+
+FROM node:20-slim AS deps
+
+WORKDIR /repo
+COPY package.json package-lock.json* ./
+COPY apps/web/package.json apps/web/package.json
+# 有 lock 文件就用 npm ci（可复现），否则回落到 npm install
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+
+FROM node:20-slim AS builder
+
+ARG NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000/api/v1
+ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL} \
+    NEXT_TELEMETRY_DISABLED=1
+
+WORKDIR /repo
+COPY --from=deps /repo/node_modules ./node_modules
+COPY package.json ./
+COPY apps/web ./apps/web
+RUN npm run build --workspace apps/web
+
+FROM node:20-slim AS runtime
+
+ENV NODE_ENV=production \
+    TZ=Asia/Shanghai \
+    NEXT_TELEMETRY_DISABLED=1
+
+WORKDIR /repo
+COPY --from=builder /repo/node_modules ./node_modules
+COPY --from=builder /repo/package.json ./package.json
+COPY --from=builder /repo/apps/web ./apps/web
+
+USER node
+
+EXPOSE 3000
+CMD ["npm", "run", "start", "--workspace", "apps/web"]

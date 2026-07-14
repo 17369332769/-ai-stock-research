@@ -1,0 +1,25 @@
+# OpenBB 中国法定披露 Provider —— 可独立安装的 OpenBB 扩展。
+#
+#   pip install -e services/openbb_extensions/cn_disclosure_provider
+
+[project]
+name = "openbb-cn-disclosure"
+version = "0.1.0"
+description = "OpenBB provider for Chinese statutory disclosures (cninfo / SSE / SZSE)"
+requires-python = ">=3.12,<3.13"
+license = { text = "AGPL-3.0-only" }
+dependencies = [
+  "openbb-core>=1.6.10,<2.0.0",
+  "httpx>=0.27",
+]
+
+[project.entry-points."openbb_provider_extension"]
+cn_disclosure = "openbb_cn_disclosure.provider:cn_disclosure_provider"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = { "openbb_cn_disclosure" = "." }
+packages = ["openbb_cn_disclosure", "openbb_cn_disclosure.models"]

@@ -1,0 +1,12 @@
+{
+  "detail": [
+    {
+      "loc": [
+        "query",
+        "symbol"
+      ],
+      "msg": "field required",
+      "type": "value_error.missing"
+    }
+  ]
+}

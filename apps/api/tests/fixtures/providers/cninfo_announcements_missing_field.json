@@ -1,0 +1,15 @@
+{
+  "totalAnnouncement": 1,
+  "totalRecordNum": 1,
+  "hasMore": false,
+  "announcements": [
+    {
+      "announcementId": "1220001111",
+      "announcementTitle": "缺少附件地址的公告",
+      "announcementTime": 1783989000000,
+      "secCode": "600519",
+      "secName": "贵州茅台",
+      "orgId": "gssh0600519"
+    }
+  ]
+}

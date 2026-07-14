@@ -1,0 +1,48 @@
+# 构建上下文瘦身 + 防止密钥/数据进镜像（spec §14.3）
+.git
+.gitignore
+.github
+
+# 密钥：绝不进镜像（只在运行期从环境变量注入）
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+.venv
+venv
+__pycache__
+*.py[cod]
+*.egg-info
+.mypy_cache
+.ruff_cache
+.pytest_cache
+dist
+build
+
+# Node / Next.js（镜像内自己 npm ci + build）
+node_modules
+apps/web/node_modules
+apps/web/.next
+apps/web/out
+.turbo
+*.tsbuildinfo
+
+# 数据、模型产物与备份：运行期用只读挂载，不进镜像层
+artifacts
+data
+backups
+qlib_data
+*.parquet
+*.dump
+
+# 文档与本机杂物
+docs
+*.md
+!README.md
+ai-stock-research-assistant-spec.html
+.DS_Store
+*.log
+.worker-state

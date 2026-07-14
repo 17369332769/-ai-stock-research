@@ -1,0 +1,32 @@
+{
+  "results": [
+    {
+      "date": "2026-07-14T09:12:00+08:00",
+      "title": "白酒板块早盘走强，贵州茅台涨逾1%",
+      "text": "7月14日早盘，白酒板块震荡走强……",
+      "url": "https://finance.eastmoney.com/a/202607143100000001.html",
+      "symbols": "600519",
+      "source": "东方财富",
+      "provider_source": "eastmoney_via_akshare",
+      "keyword": "600519"
+    },
+    {
+      "date": "2026-07-14T09:12:00+08:00",
+      "title": "白酒板块早盘走强，贵州茅台涨逾1%",
+      "text": "7月14日早盘，白酒板块震荡走强……",
+      "url": "https://news.10jqka.com.cn/20260714/c660000001.shtml",
+      "symbols": "600519",
+      "source": "同花顺",
+      "provider_source": "eastmoney_via_akshare",
+      "keyword": "600519"
+    }
+  ],
+  "provider": "akshare",
+  "warnings": [],
+  "chart": null,
+  "extra": {
+    "metadata": {
+      "arguments": {}
+    }
+  }
+}

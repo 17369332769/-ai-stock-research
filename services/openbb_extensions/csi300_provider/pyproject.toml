@@ -1,0 +1,25 @@
+# OpenBB 沪深300 成分 Provider —— 可独立安装的 OpenBB 扩展。
+#
+#   pip install -e services/openbb_extensions/csi300_provider
+
+[project]
+name = "openbb-csi300"
+version = "0.1.0"
+description = "OpenBB provider for CSI 300 index constituents (current + historical snapshots)"
+requires-python = ">=3.12,<3.13"
+license = { text = "AGPL-3.0-only" }
+dependencies = [
+  "openbb-core>=1.6.10,<2.0.0",
+  "httpx>=0.27",
+]
+
+[project.entry-points."openbb_provider_extension"]
+csi300 = "openbb_csi300.provider:csi300_provider"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = { "openbb_csi300" = "." }
+packages = ["openbb_csi300", "openbb_csi300.models"]
