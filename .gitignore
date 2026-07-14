@@ -1,0 +1,41 @@
+# 环境与密钥
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+.turbo/
+
+# 数据与模型产物（不入库：数据源仅限个人研究，不得重新分发）
+artifacts/
+data/
+*.parquet
+*.duckdb
+qlib_data/
+
+# 数据库备份
+backups/
+*.dump
+*.sql.gz
+
+# 日志与临时文件
+*.log
+.DS_Store
