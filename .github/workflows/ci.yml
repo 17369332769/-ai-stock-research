@@ -1,0 +1,113 @@
+# CI —— spec §16.1 的"CI固定命令"，逐条原样执行，顺序不变。
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+
+    # 没有真库时，集成测试与 DB 支撑的 API 用例会静默 skip —— CI 变绿但什么都没验证。
+    # 因此这里起一个真 PostgreSQL 16，并断言 skip 数为 0（见下方"零 skip"步骤）。
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      TEST_DATABASE_URL: postgresql+asyncpg://app:app@127.0.0.1:5432/app_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 安装依赖
+        run: python -m pip install -e ".[dev]"
+
+      - name: ruff
+        run: python -m ruff check .
+
+      - name: mypy
+        run: python -m mypy apps services
+
+      # 防"假绿"：测试库不通时 conftest 会 skip 掉全部 DB 用例，而 pytest 仍然退出 0。
+      # 所以这里不只看退出码 —— 出现任何 SKIPPED 都判失败，确保集成层真的跑过。
+      - name: pytest（零 skip）
+        run: |
+          set -o pipefail
+          python -m pytest -q -rs | tee /tmp/pytest.log
+          if grep -q '^SKIPPED' /tmp/pytest.log; then
+            echo "::error::存在被跳过的测试 —— 集成测试必须真跑，不接受静默 skip"
+            grep '^SKIPPED' /tmp/pytest.log
+            exit 1
+          fi
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: 安装依赖
+        run: npm install
+
+      - name: 安装 Playwright 浏览器
+        run: npx playwright install --with-deps chromium
+
+      - name: lint
+        run: npm run lint --workspace apps/web
+
+      - name: typecheck
+        run: npm run typecheck --workspace apps/web
+
+      - name: 单元测试
+        run: npm run test --workspace apps/web
+
+      - name: 端到端测试
+        run: npm run test:e2e --workspace apps/web
+
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 只校验 compose 语法与插值，不需要 Docker daemon
+      - name: docker compose config
+        run: docker compose -f infra/docker-compose.yml config
+
+      # spec §14.3 硬约束：端口只允许绑 127.0.0.1
+      - name: 端口必须只绑回环
+        run: |
+          set -euo pipefail
+          published=$(docker compose -f infra/docker-compose.yml config --format json \
+            | python3 -c 'import json,sys; c=json.load(sys.stdin); print("\n".join(f"{s}:{p.get(\"host_ip\",\"\")}" for s,v in c["services"].items() for p in v.get("ports",[])))')
+          echo "${published}"
+          if echo "${published}" | grep -v ':127.0.0.1$' | grep -q ':'; then
+            echo "存在非 127.0.0.1 的端口绑定，违反 spec §14.3" >&2
+            exit 1
+          fi
