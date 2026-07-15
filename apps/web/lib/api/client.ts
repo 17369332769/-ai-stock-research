@@ -158,6 +158,10 @@ export interface ListResponse<T> {
   requestId: string | null;
 }
 
+export interface MetaListResponse<T, M> extends ListResponse<T> {
+  meta: M | null;
+}
+
 /** 取单个对象（自动解信封）。 */
 export async function apiGet<T>(
   path: string,
@@ -194,6 +198,22 @@ export async function apiGetList<T>(
     items: Array.isArray(envelope.data) ? envelope.data : [],
     page: envelope.page ?? EMPTY_PAGE,
     requestId: raw.requestId,
+  };
+}
+
+/** 取带业务元数据的列表；历史行情摘要由 API 计算并放在 meta 中。 */
+export async function apiGetListWithMeta<T, M>(
+  path: string,
+  query?: Record<string, QueryValue>,
+): Promise<MetaListResponse<T, M>> {
+  const raw = await request(path, { method: 'GET', query });
+  const envelope = (raw.body ?? {}) as Partial<ListEnvelope<T>> & { meta?: M };
+  return {
+    status: raw.status,
+    items: Array.isArray(envelope.data) ? envelope.data : [],
+    page: envelope.page ?? EMPTY_PAGE,
+    requestId: raw.requestId,
+    meta: envelope.meta ?? null,
   };
 }
 

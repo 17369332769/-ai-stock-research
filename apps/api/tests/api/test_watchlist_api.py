@@ -124,7 +124,58 @@ async def test_watchlist_lists_quote_and_freshness(
     assert item["symbol"] == SYMBOL
     assert item["name"] == "贵州茅台"
     assert item["is_current_universe_member"] is True
+    assert item["market"]["phase"] == "morning"
     assert item["quote"]["freshness"] == "fresh"
+
+
+async def test_watchlist_without_quote_is_not_reported_as_provider_failure(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    await setup_member(session)
+    await client.post("/api/v1/watchlist", json={"symbol": SYMBOL})
+
+    item = (await client.get("/api/v1/watchlist")).json()["data"][0]
+
+    assert item["quote"] is None
+    assert item["market"]["phase"] == "morning"
+
+
+async def test_watchlist_uses_server_cursor_pagination(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    await setup_member(session)
+    await setup_member_second(session)
+    await client.post("/api/v1/watchlist", json={"symbol": SYMBOL})
+    await client.post("/api/v1/watchlist", json={"symbol": OTHER_SYMBOL})
+
+    first = (await client.get("/api/v1/watchlist?limit=1")).json()
+    assert len(first["data"]) == 1
+    assert first["page"]["has_more"] is True
+    assert first["page"]["next_cursor"]
+
+    second = (
+        await client.get(
+            "/api/v1/watchlist",
+            params={"limit": 1, "cursor": first["page"]["next_cursor"]},
+        )
+    ).json()
+    assert len(second["data"]) == 1
+    assert second["data"][0]["symbol"] != first["data"][0]["symbol"]
+    assert second["page"] == {"next_cursor": None, "has_more": False}
+
+
+async def test_watchlist_searches_all_items_before_pagination(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    await setup_member(session)
+    await setup_member_second(session)
+    await client.post("/api/v1/watchlist", json={"symbol": SYMBOL})
+    await client.post("/api/v1/watchlist", json={"symbol": OTHER_SYMBOL})
+
+    body = (await client.get("/api/v1/watchlist", params={"q": "平安", "limit": 50})).json()
+
+    assert [item["symbol"] for item in body["data"]] == [OTHER_SYMBOL]
+    assert body["page"] == {"next_cursor": None, "has_more": False}
 
 
 async def test_delete_watchlist_returns_204(client: AsyncClient, session: AsyncSession) -> None:

@@ -19,7 +19,7 @@ from typing import Any
 import httpx
 
 from .constants import (
-    CSINDEX_CONS_URLS,
+    CSINDEX_CONS_URL,
     CSINDEX_INDEX_PAGE,
     DEFAULT_TIMEOUT_SECONDS,
     SHANGHAI,
@@ -93,36 +93,32 @@ async def fetch_current(
 ) -> tuple[bytes, str, str]:
     """下载官方当期成分文件 → (bytes, 命中的 URL, 文件扩展名)。
 
-    两个候选 URL 是同一发行方的主站与 OSS 镜像（口径一致），全部失败即 unavailable。
+    只调用配置的中证指数官方文件入口，失败即 unavailable。
     """
     owns = client is None
     http = client or httpx.AsyncClient(timeout=timeout, headers=_HEADERS, follow_redirects=True)
-    errors: list[str] = []
     try:
-        for url in CSINDEX_CONS_URLS:
-            try:
-                response = await http.get(url, headers=_HEADERS)
-            except httpx.TimeoutException as exc:
-                errors.append(f"{url}: 超时（{exc}）")
-                continue
-            except httpx.HTTPError as exc:
-                errors.append(f"{url}: 网络错误（{exc}）")
-                continue
-            if response.status_code == 429:
-                errors.append(f"{url}: 限流 HTTP 429")
-                continue
-            if response.status_code >= 400:
-                errors.append(f"{url}: HTTP {response.status_code}")
-                continue
-            payload = response.content
-            if not payload:
-                errors.append(f"{url}: 响应体为空")
-                continue
-            return payload, url, _extension_for(url, response.headers.get("content-type"))
+        try:
+            response = await http.get(CSINDEX_CONS_URL, headers=_HEADERS)
+        except httpx.TimeoutException as exc:
+            raise ProviderUpstreamError(f"中证指数成分文件超时：{exc}") from exc
+        except httpx.HTTPError as exc:
+            raise ProviderUpstreamError(f"中证指数成分文件网络错误：{exc}") from exc
+        if response.status_code == 429:
+            raise ProviderUpstreamError("中证指数成分文件限流：HTTP 429")
+        if response.status_code >= 400:
+            raise ProviderUpstreamError(
+                f"中证指数成分文件不可用：HTTP {response.status_code}"
+            )
+        payload = response.content
+        if not payload:
+            raise ProviderUpstreamError("中证指数成分文件响应体为空")
+        return payload, CSINDEX_CONS_URL, _extension_for(
+            CSINDEX_CONS_URL, response.headers.get("content-type")
+        )
     finally:
         if owns:
             await http.aclose()
-    raise ProviderUpstreamError("中证指数成分文件不可用：" + "；".join(errors))
 
 
 async def get_current_constituents(
@@ -148,7 +144,7 @@ def get_snapshot_constituents(
     directory: Path | None = None,
     observed_at: datetime | None = None,
 ) -> list[dict[str, Any]]:
-    """读取 ``<= as_of`` 的最新官方历史快照。缺失 → ``SnapshotNotFound``（绝不回退到当前成分）。"""
+    """读取 ``<= as_of`` 的最新官方历史快照。缺失时抛出 ``SnapshotNotFound``。"""
     candidates = [item for item in list_snapshots(directory) if item[0] <= as_of]
     if not candidates:
         raise SnapshotNotFound(

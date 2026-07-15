@@ -42,6 +42,12 @@ async def test_worker_not_running_reports_failed_not_ok(client: AsyncClient, sta
     assert all(s["status"] == "failed" for s in sources)
     assert all(s["last_error_code"] == "WORKER_UNAVAILABLE" for s in sources)
     assert all(s["last_success_at"] is None for s in sources)
+    assert {s["key"]: s["active_source"] for s in sources} == {
+        "csi300": "csindex",
+        "akshare": "eastmoney_via_akshare",
+        "cn_disclosure": "cninfo",
+    }
+    assert all(isinstance(s["coverage"], int) and isinstance(s["total"], int) for s in sources)
 
 
 async def test_corrupted_snapshot_reports_failed(client: AsyncClient, state_dir: Path) -> None:
@@ -56,13 +62,13 @@ async def test_corrupted_snapshot_reports_failed(client: AsyncClient, state_dir:
     assert all(s["last_error_code"] == "WORKER_HEALTH_UNREADABLE" for s in sources)
 
 
-async def test_never_run_source_is_not_ok(client: AsyncClient, state_dir: Path) -> None:
-    """worker 刚起、还没跑过采集 → failed（"尚未采集"），不能显示"正常"。"""
+async def test_never_run_source_is_pending(client: AsyncClient, state_dir: Path) -> None:
+    """worker 刚起、还没到调度时间 → pending，不得显示为正常或失败。"""
     _write_health(
         state_dir,
         {
             "schema_version": 1,
-            "providers": {"csindex": {"provider": "csindex", "status": "never_run"}},
+            "providers": {"csi300": {"provider": "csi300", "status": "never_run"}},
             "jobs": {},
         },
     )
@@ -70,7 +76,40 @@ async def test_never_run_source_is_not_ok(client: AsyncClient, state_dir: Path) 
     response = await client.get("/api/v1/system/status")
 
     by_key = {s["key"]: s for s in response.json()["data"]["sources"]}
-    assert by_key["csindex"]["status"] == "failed"
+    assert by_key["csi300"]["status"] == "pending"
+
+
+async def test_provider_with_success_is_ok_when_only_a_scheduled_job_has_not_run(
+    client: AsyncClient, state_dir: Path
+) -> None:
+    """同一 Provider 已有成功采集时，盘前报价作业未运行不等于数据源失败。"""
+    _write_health(
+        state_dir,
+        {
+            "schema_version": 1,
+            "providers": {
+                "akshare": {
+                    "provider": "akshare",
+                    "status": "never_run",
+                    "last_success_at": "2026-07-15T08:00:00+08:00",
+                }
+            },
+            "jobs": {
+                "watchlist_quotes": {
+                    "provider": "akshare",
+                    "consecutive_failures": 0,
+                }
+            },
+        },
+    )
+
+    by_key = {
+        source["key"]: source
+        for source in (await client.get("/api/v1/system/status")).json()["data"]["sources"]
+    }
+
+    assert by_key["akshare"]["status"] == "ok"
+    assert by_key["akshare"]["last_error_code"] is None
 
 
 async def test_degraded_source_surfaces_last_success_and_error(
@@ -82,17 +121,21 @@ async def test_degraded_source_surfaces_last_success_and_error(
         {
             "schema_version": 1,
             "providers": {
-                "eastmoney_via_akshare": {
-                    "provider": "eastmoney_via_akshare",
+                "akshare": {
+                    "provider": "akshare",
                     "status": "degraded",
                     "last_success_at": "2026-07-14T09:30:00+08:00",
                 }
             },
             "jobs": {
                 "ingest_watchlist_quotes": {
-                    "provider": "eastmoney_via_akshare",
+                    "provider": "akshare",
+                    "job_id": "ingest_watchlist_quotes",
+                    "title": "自选股报价",
+                    "status": "degraded",
                     "consecutive_failures": 5,
                     "last_error": "PROVIDER_UNAVAILABLE: 上游 429",
+                    "next_run_at": "2026-07-14T09:31:00+08:00",
                 }
             },
         },
@@ -101,11 +144,14 @@ async def test_degraded_source_surfaces_last_success_and_error(
     response = await client.get("/api/v1/system/status")
 
     by_key = {s["key"]: s for s in response.json()["data"]["sources"]}
-    source = by_key["eastmoney_via_akshare"]
+    source = by_key["akshare"]
     assert source["status"] == "degraded"
     assert source["last_success_at"].startswith("2026-07-14T09:30:00")
     assert source["consecutive_failures"] == 5
     assert "429" in source["last_error_message"]
+    assert source["active_source"] == "eastmoney_via_akshare"
+    assert source["failing_jobs"] == ["自选股报价"]
+    assert source["next_run_at"].startswith("2026-07-14T09:31:00")
 
 
 async def test_healthy_source_is_ok(client: AsyncClient, state_dir: Path) -> None:
@@ -114,21 +160,26 @@ async def test_healthy_source_is_ok(client: AsyncClient, state_dir: Path) -> Non
         {
             "schema_version": 1,
             "providers": {
-                "cninfo": {
-                    "provider": "cninfo",
+                "cn_disclosure": {
+                    "provider": "cn_disclosure",
                     "status": "healthy",
                     "last_success_at": "2026-07-14T10:00:00+08:00",
                 }
             },
-            "jobs": {"ingest_announcements": {"provider": "cninfo", "consecutive_failures": 0}},
+            "jobs": {
+                "ingest_announcements": {
+                    "provider": "cn_disclosure",
+                    "consecutive_failures": 0,
+                }
+            },
         },
     )
 
     response = await client.get("/api/v1/system/status")
 
     by_key = {s["key"]: s for s in response.json()["data"]["sources"]}
-    assert by_key["cninfo"]["status"] == "ok"
-    assert by_key["cninfo"]["consecutive_failures"] == 0
+    assert by_key["cn_disclosure"]["status"] == "ok"
+    assert by_key["cn_disclosure"]["consecutive_failures"] == 0
 
 
 async def test_agent_unconfigured_is_unavailable_not_error(

@@ -43,28 +43,15 @@ async def get_many(
     return {row.id: row for row in result.scalars().all()}
 
 
-async def latest_by_key(session: AsyncSession, model_key: str) -> ModelVersion | None:
-    """成绩单的基准指标取自该 model_key 最近一个版本的 validation_metrics（spec §9.3.1）。
-
-    优先 active；没有 active 时退到最近创建的版本（模型被 retire 后成绩单仍要能看）。
-    """
-    active = await session.execute(
-        select(ModelVersion)
-        .where(ModelVersion.model_key == model_key, ModelVersion.status == ModelStatus.ACTIVE.value)
-        .order_by(ModelVersion.created_at.desc())
-        .limit(1)
-    )
-    row = active.scalar_one_or_none()
-    if row is not None:
-        return row
-
-    fallback = await session.execute(
+async def latest_for_scorecard(session: AsyncSession, model_key: str) -> ModelVersion | None:
+    """成绩单明确读取该 ``model_key`` 最近创建版本的验证指标。"""
+    result = await session.execute(
         select(ModelVersion)
         .where(ModelVersion.model_key == model_key)
         .order_by(ModelVersion.created_at.desc())
         .limit(1)
     )
-    return fallback.scalar_one_or_none()
+    return result.scalar_one_or_none()
 
 
 async def key_exists(session: AsyncSession, model_key: str) -> bool:

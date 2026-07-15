@@ -18,6 +18,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY pyproject.toml ./
 COPY apps/__init__.py apps/__init__.py
 COPY apps/api/__init__.py apps/api/__init__.py
+COPY apps/api/app/__init__.py apps/api/app/__init__.py
 COPY services/__init__.py services/__init__.py
 RUN pip install --no-cache-dir -e .
 

@@ -1,13 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 
 import { PredictionHistoryTable } from '@/components/PredictionHistoryTable';
 import { ScorecardTable } from '@/components/ScorecardTable';
 import { Section } from '@/components/Section';
 import { StateNotice } from '@/components/StateNotice';
 import { Disclaimer } from '@/components/Disclaimer';
-import { getPredictionHistory, getScorecard, getSystemStatus, getWatchlist } from '@/lib/api/endpoints';
+import { getAllWatchlistItems, getPredictionHistory, getScorecard, getSystemStatus } from '@/lib/api/endpoints';
 import type { PredictionHorizon, ScorecardDTO, ScorecardWindow } from '@/lib/api/types';
 import { errorMessage } from '@/lib/error-messages';
 import { HORIZON_LABELS } from '@/lib/constants';
@@ -47,7 +48,7 @@ export default function ScorecardPage() {
     return results.filter((card): card is ScorecardDTO => card !== null);
   }, [modelKeys.join(','), window]);
 
-  const watchlist = useApiResource(async () => (await getWatchlist()).items, []);
+  const watchlist = useApiResource(() => getAllWatchlistItems(), []);
   const symbols = (watchlist.data ?? []).map((item) => item.symbol);
   const activeSymbol = symbol || symbols[0] || '';
 
@@ -57,6 +58,7 @@ export default function ScorecardPage() {
   }, [activeSymbol, horizon]);
 
   const modelErrorState = mapErrorToState(status.error);
+  const marketSource = status.data?.sources.find((source) => source.key === 'akshare') ?? null;
 
   return (
     <div data-testid="scorecard-page">
@@ -94,7 +96,20 @@ export default function ScorecardPage() {
         ) : status.loading && !status.loaded ? (
           <p className="empty-hint">加载中…</p>
         ) : modelKeys.length === 0 ? (
-          <StateNotice state="model_unavailable" detail="当前没有已注册的模型版本。" />
+          <div data-testid="model-setup-guide">
+            <StateNotice state="model_unavailable" detail="模型尚未启用，当前不会生成正式预测。" />
+            <ol className="setup-checklist">
+              <li>
+                历史行情覆盖：{marketSource ? `${marketSource.coverage}/${marketSource.total}` : '正在检查'}
+              </li>
+              <li>生成特征数据并完成训练，模型版本先进入 candidate。</li>
+              <li>确认离线成绩优于基准后，将指定版本激活为 active。</li>
+              <li>只有 active 版本会生成正式预测并进入成绩单。</li>
+            </ol>
+            <Link className="btn btn--ghost" href="/settings/data-sources">
+              查看数据与模型运行状态
+            </Link>
+          </div>
         ) : scorecards.loading && !scorecards.loaded ? (
           <p className="empty-hint">加载中…</p>
         ) : (scorecards.data ?? []).length === 0 ? (

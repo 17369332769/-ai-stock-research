@@ -56,7 +56,7 @@ async def get_scorecard(
 ) -> ScorecardDTO:
     window = parse_window(window_raw)
 
-    model = await model_versions_repo.latest_by_key(session, model_key)
+    model = await model_versions_repo.latest_for_scorecard(session, model_key)
     if model is None:
         raise ModelUnavailable(f"没有 model_key={model_key} 的模型版本")
 

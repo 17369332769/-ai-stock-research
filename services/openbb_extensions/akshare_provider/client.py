@@ -1,6 +1,7 @@
 """唯一触达 akshare 的模块。
 
-spec §5.2 硬约束：**只允许调用 4 个 akshare 函数**。这里用运行时白名单
+生产数据调用由运行时白名单约束。每类数据只调用一个明确的上游函数；异常保持
+原始语义并直接向上传递。
 ``ALLOWED_AKSHARE_FUNCTIONS`` 强制 —— 任何越权调用直接 ``ProviderConfigError``，
 而不是靠 code review 或注释约束（见 tests/test_akshare_client_allowlist.py）。
 
@@ -11,6 +12,7 @@ akshare 是同步阻塞库；OpenBB Fetcher 是 async，因此对外暴露的都
 from __future__ import annotations
 
 import asyncio
+import time
 from datetime import date, datetime
 from types import ModuleType
 from typing import Any, cast
@@ -24,7 +26,7 @@ from .constants import (
 )
 from .transform import normalize_symbol
 
-# ── spec §5.2：AKShare 扩展只允许调用这 4 个函数 ───────────────────────────────
+# ── AKShare 生产调用白名单 ───────────────────────────────────────────────────
 ALLOWED_AKSHARE_FUNCTIONS: frozenset[str] = frozenset(
     {
         "stock_zh_a_spot_em",  # 实时行情快照
@@ -37,13 +39,39 @@ ALLOWED_AKSHARE_FUNCTIONS: frozenset[str] = frozenset(
 # akshare 固定版本（spec §5.2）
 PINNED_AKSHARE_VERSION = "1.18.64"
 
+# stock_zh_a_spot_em 会分页拉取整个 A 股市场。定时刷新与多个手动刷新可能在同一时刻
+# 到达 OpenBB；用很短的进程内快照合并并发请求，避免为每个 symbol 重复抓整市场。
+# 这不是持久缓存：进程重启即丢失，失败也绝不缓存。
+SPOT_CACHE_TTL_SECONDS = 12.0
+_spot_cache: tuple[dict[str, Any], ...] | None = None
+_spot_cache_expires_at = 0.0
+_spot_fetch_lock = asyncio.Lock()
+_spot_inflight: asyncio.Task[tuple[dict[str, Any], ...]] | None = None
+
+
+def _copy_records(records: tuple[dict[str, Any], ...]) -> list[dict[str, Any]]:
+    return [dict(row) for row in records]
+
+
+def reset_spot_cache() -> None:
+    """清空进程内报价快照；供测试和运维探针使用。"""
+    global _spot_cache, _spot_cache_expires_at, _spot_inflight
+    _spot_cache = None
+    _spot_cache_expires_at = 0.0
+    _spot_inflight = None
+
+
+async def _load_spot_snapshot() -> tuple[dict[str, Any], ...]:
+    records = await acall_akshare("stock_zh_a_spot_em")
+    return tuple(dict(row) for row in records)
+
 
 def _import_akshare() -> ModuleType:
     try:
         import akshare  # 延迟导入：未装 akshare 时仍可跑纯 transform 契约测试
     except ImportError as exc:  # pragma: no cover - 依赖缺失是部署问题
         raise ProviderUpstreamError(
-            "akshare 未安装：AKShare Provider 不可用（fail closed，不使用任何备用源）"
+            "akshare 未安装：AKShare Provider 不可用"
         ) from exc
     # akshare 无 type stub，import 结果在 mypy 眼里是 Any；显式收窄成 ModuleType，
     # 使 Any 不会从这里泄漏到调用方。
@@ -107,35 +135,67 @@ def _yyyy_mm_dd_hhmmss(value: datetime) -> str:
     return value.strftime("%Y-%m-%d %H:%M:%S")
 
 
-# ── 4 个白名单函数的类型化封装 ─────────────────────────────────────────────
+# ── 白名单函数的类型化封装 ─────────────────────────────────────────────────
 async def fetch_spot() -> list[dict[str, Any]]:
-    """沪深京 A 股全市场实时快照。上游没有单标的接口，只能整表拉取后本地过滤。"""
-    return await acall_akshare("stock_zh_a_spot_em")
+    """沪深京 A 股全市场实时快照；短时缓存并合并并发的整市场抓取。"""
+    global _spot_cache, _spot_cache_expires_at, _spot_inflight
+
+    now = time.monotonic()
+    if _spot_cache is not None and now < _spot_cache_expires_at:
+        return _copy_records(_spot_cache)
+
+    async with _spot_fetch_lock:
+        now = time.monotonic()
+        if _spot_cache is not None and now < _spot_cache_expires_at:
+            return _copy_records(_spot_cache)
+        if _spot_inflight is None:
+            _spot_inflight = asyncio.create_task(_load_spot_snapshot())
+        task = _spot_inflight
+
+    try:
+        # 一个 HTTP 请求被取消时不能连带取消其他正在等待同一整市场快照的请求。
+        snapshot = await asyncio.shield(task)
+    except BaseException:
+        async with _spot_fetch_lock:
+            if _spot_inflight is task and task.done():
+                _spot_inflight = None
+        raise
+
+    async with _spot_fetch_lock:
+        _spot_cache = snapshot
+        _spot_cache_expires_at = time.monotonic() + SPOT_CACHE_TTL_SECONDS
+        if _spot_inflight is task:
+            _spot_inflight = None
+    return _copy_records(snapshot)
 
 
 async def fetch_daily(
     symbol: str, start: date, end: date, adjustment: str = DEFAULT_ADJUSTMENT
 ) -> list[dict[str, Any]]:
+    code = normalize_symbol(symbol)
+    adjust = _check_adjustment(adjustment)
     return await acall_akshare(
         "stock_zh_a_hist",
-        symbol=normalize_symbol(symbol),
+        symbol=code,
         period="daily",
         start_date=_yyyymmdd(start),
         end_date=_yyyymmdd(end),
-        adjust=_check_adjustment(adjustment),
+        adjust=adjust,
     )
 
 
 async def fetch_minute(
     symbol: str, start: datetime, end: datetime, adjustment: str = DEFAULT_ADJUSTMENT
 ) -> list[dict[str, Any]]:
+    code = normalize_symbol(symbol)
+    adjust = _check_adjustment(adjustment)
     return await acall_akshare(
         "stock_zh_a_hist_min_em",
-        symbol=normalize_symbol(symbol),
+        symbol=code,
         start_date=_yyyy_mm_dd_hhmmss(start),
         end_date=_yyyy_mm_dd_hhmmss(end),
         period=MINUTE_PERIOD,
-        adjust=_check_adjustment(adjustment),
+        adjust=adjust,
     )
 
 

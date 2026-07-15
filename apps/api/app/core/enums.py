@@ -64,6 +64,7 @@ class ModelStatus(StrEnum):
 class JobType(StrEnum):
     INSTRUMENT_BACKFILL = "instrument_backfill"
     ANALYSIS_REFRESH = "analysis_refresh"
+    QUOTE_REFRESH = "quote_refresh"
     PREDICTION = "prediction"
     SETTLEMENT = "settlement"
 

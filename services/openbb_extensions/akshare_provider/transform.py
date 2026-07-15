@@ -267,8 +267,8 @@ def _bar_payload(
         "turnover_rate": _optional_float(record, COL_HIST_TURNOVER_RATE, ctx),
         "timeframe": timeframe,
         "adjustment": adjustment,
-        "source": SOURCE_NAME,
-        "source_url": quote_url(symbol),
+        "source": str(record.get("_source") or SOURCE_NAME),
+        "source_url": str(record.get("_source_url") or quote_url(symbol)),
         "volume_unit": VOLUME_UNIT,
         "amount_unit": AMOUNT_UNIT,
     }

@@ -1,18 +1,25 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AnalogsPanel } from '@/components/AnalogsPanel';
 import { BackfillProgress } from '@/components/BackfillProgress';
 import { DocumentsPanel } from '@/components/DocumentsPanel';
+import { HistoricalBarsChart } from '@/components/HistoricalBarsChart';
+import { MarketHistoryPanel } from '@/components/MarketHistoryPanel';
 import { PredictionPanel } from '@/components/PredictionPanel';
 import { QuoteHeader } from '@/components/QuoteHeader';
+import { SourceDisplay } from '@/components/SourceDisplay';
 import { StateNotice, StateNoticeList } from '@/components/StateNotice';
 import { WatchlistTable } from '@/components/WatchlistTable';
 import { UI_STATES, stateLabel } from '@/lib/ui-state';
 import {
   CLOSED_MARKET,
+  DAILY_BARS,
+  DAILY_BARS_META,
+  DOCUMENTS,
   FRESH_QUOTE,
   JOB_WITH_WARNING,
+  MINUTE_BARS,
   NAME,
   QUEUED_JOB,
   RUNNING_JOB,
@@ -47,7 +54,9 @@ describe('QuoteHeader：行情过期与休市红线', () => {
     expect(screen.getByTestId('badge-realtime')).toHaveTextContent('实时');
     expect(screen.getByTestId('price-label')).toHaveTextContent('最新价');
     expect(screen.getByTestId('quote-freshness')).toHaveTextContent('新鲜');
-    expect(screen.getByTestId('quote-source')).toHaveTextContent('eastmoney_via_akshare');
+    expect(screen.getByTestId('quote-source')).toHaveTextContent('东方财富行情');
+    expect(screen.getByTestId('quote-source')).toHaveTextContent('通过 AKShare 采集');
+    expect(screen.getByTestId('quote-market-time')).toHaveTextContent('上游未提供');
     expect(screen.getByTestId('quote-observed-at')).toBeInTheDocument();
   });
 
@@ -62,11 +71,11 @@ describe('QuoteHeader：行情过期与休市红线', () => {
     expect(screen.getByTestId('price-label')).not.toHaveTextContent('实时');
   });
 
-  it('休市时显示「休市」与最新交易日，收盘价不标成实时', () => {
+  it('休市时显示「休市」与最新交易日，最近行情不标成实时', () => {
     render(<QuoteHeader symbol={SYMBOL} name={NAME} quote={FRESH_QUOTE} market={CLOSED_MARKET} />);
     expect(screen.getByTestId('badge-market_closed')).toHaveTextContent('休市');
     expect(screen.getByTestId('latest-trading-day')).toHaveTextContent('2026');
-    expect(screen.getByTestId('price-label')).toHaveTextContent('最新收盘价');
+    expect(screen.getByTestId('price-label')).toHaveTextContent('最近行情');
     expect(screen.queryByTestId('badge-realtime')).not.toBeInTheDocument();
   });
 
@@ -122,6 +131,99 @@ describe('DocumentsPanel / AnalogsPanel 的空状态', () => {
     render(<AnalogsPanel analogs={[]} insufficient insufficientMessage="历史样本不足" />);
     expect(screen.getByTestId('analogs-insufficient')).toHaveTextContent('历史样本不足');
   });
+
+  it('公告新闻每页展示 20 条，并可切换下一页', () => {
+    const documents = Array.from({ length: 45 }, (_, index) => ({
+      ...DOCUMENTS[index % DOCUMENTS.length]!,
+      id: `doc-page-${index + 1}`,
+      title: `文档 ${index + 1}`,
+    }));
+    render(<DocumentsPanel documents={documents} analyses={[]} />);
+
+    expect(screen.getAllByTestId('document-link')).toHaveLength(20);
+    expect(screen.getByTestId('documents-page-indicator')).toHaveTextContent('第 1 页，共 3 页');
+    fireEvent.click(screen.getByTestId('documents-page-next'));
+    expect(screen.getAllByTestId('document-link')).toHaveLength(20);
+    expect(screen.getByTestId('documents-page-indicator')).toHaveTextContent('第 2 页，共 3 页');
+  });
+
+  it('公告来源使用统一中文名称，不直接显示技术标识', () => {
+    const { container } = render(<DocumentsPanel documents={[DOCUMENTS[0]!]} analyses={[]} />);
+    expect(container).toHaveTextContent('巨潮资讯');
+    expect(container).not.toHaveTextContent('cninfo');
+  });
+
+  it('新闻来源本身是中文媒体名时保留原名', () => {
+    const chinesePublisher = { ...DOCUMENTS[1]!, source: '澎湃新闻' };
+    const { container } = render(
+      <DocumentsPanel documents={[chinesePublisher]} analyses={[]} />,
+    );
+    expect(container).toHaveTextContent('澎湃新闻');
+    expect(container).not.toHaveTextContent('未识别的数据来源');
+  });
+});
+
+describe('SourceDisplay：来源中文化', () => {
+  it('已知来源主界面显示中文，技术标识放在详情中', () => {
+    render(<SourceDisplay source="sina_via_akshare" dataType="历史日线" />);
+    expect(screen.getByTestId('source-display')).toHaveTextContent('新浪财经行情');
+    expect(screen.getByTestId('source-display')).toHaveTextContent('通过 AKShare 采集');
+    expect(screen.getByText('查看技术信息')).toBeInTheDocument();
+  });
+
+  it('未知标识明确提示未识别', () => {
+    render(<SourceDisplay source="new_vendor" />);
+    expect(screen.getByTestId('source-display')).toHaveTextContent('未识别的数据来源');
+    expect(screen.getByTestId('source-display')).toHaveAttribute('data-source-known', 'false');
+  });
+});
+
+describe('HistoricalBarsChart：历史行情独立展示', () => {
+  it('显示日线区间、最新收盘与来源', () => {
+    render(
+      <HistoricalBarsChart
+        bars={DAILY_BARS}
+        meta={DAILY_BARS_META}
+        summary={DAILY_BARS_META.summaries['1y']}
+        rangeLabel="近 1 年"
+      />,
+    );
+    expect(screen.getByTestId('historical-line-chart')).toHaveAttribute(
+      'aria-label',
+      '历史日线收盘价，共 3 条',
+    );
+    expect(screen.getByTestId('historical-line-chart')).toHaveAttribute(
+      'data-chart-library',
+      'echarts',
+    );
+    expect(screen.getByTestId('historical-latest-close')).toHaveTextContent('1,215.04');
+    expect(screen.getByTestId('historical-source')).toHaveTextContent('akshare');
+    expect(screen.getByTestId('historical-bars')).not.toHaveTextContent('实时');
+    expect(screen.getByTestId('historical-bars')).toHaveTextContent('横轴是日期');
+    expect(screen.getByTestId('historical-bars')).toHaveTextContent('前复权（便于比较长期涨跌）');
+    expect(screen.getByTestId('history-summary')).toHaveTextContent('区间最高收盘');
+  });
+
+  it('日线与 5 分钟线使用明确周期切换', () => {
+    render(
+      <MarketHistoryPanel
+        dailyBars={DAILY_BARS}
+        dailyMeta={DAILY_BARS_META}
+        dailyMessage={null}
+        minuteBars={MINUTE_BARS}
+        minuteMeta={null}
+        minuteMessage={null}
+      />,
+    );
+    expect(screen.getByTestId('history-period-1d')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('history-range-1y')).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByTestId('history-period-5m'));
+    expect(screen.getByTestId('history-period-5m')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('historical-line-chart')).toHaveAttribute(
+      'aria-label',
+      '历史5 分钟线收盘价，共 2 条',
+    );
+  });
 });
 
 describe('PredictionPanel 的无预测状态', () => {
@@ -167,7 +269,7 @@ describe('WatchlistTable：排序、搜索、数据新鲜度（spec §13.1）', 
   it('已调出沪深300的自选股带标记', () => {
     render(
       <WatchlistTable
-        items={[{ ...WATCHLIST[0]!, in_current_universe: false }]}
+        items={[{ ...WATCHLIST[0]!, is_current_universe_member: false }]}
         onRemove={noop}
         onMove={noop}
       />,

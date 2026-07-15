@@ -10,6 +10,7 @@ import type { Page, Route } from '@playwright/test';
 import type {
   AnalogDTO,
   AnalysisDTO,
+  BarDTO,
   DocumentDTO,
   InstrumentDTO,
   JobDTO,
@@ -22,6 +23,8 @@ import type {
 import {
   ANALOGS,
   ANOMALY_ANALYSIS,
+  DAILY_BARS,
+  MINUTE_BARS,
   DOCUMENTS,
   DOCUMENT_ANALYSIS,
   PREDICTION_5D,
@@ -80,6 +83,7 @@ export interface MockOverrides {
   search?: Handler;
   job?: Handler;
   snapshot?: Handler;
+  bars?: Handler;
   documents?: Handler;
   analyses?: Handler;
   predictionLatest?: Handler;
@@ -132,6 +136,8 @@ function defaults(): Required<MockOverrides> {
     },
     job: () => envelope({ ...BACKFILL_JOB_QUEUED, status: 'running', completed_steps: 1, current_step: 'minute_bars' }),
     snapshot: () => item(SNAPSHOT as SnapshotDTO),
+    bars: (ctx) =>
+      list((ctx.url.searchParams.get('timeframe') === '5m' ? MINUTE_BARS : DAILY_BARS) as BarDTO[]),
     documents: () => list(DOCUMENTS as DocumentDTO[]),
     analyses: (ctx) =>
       list(
@@ -193,6 +199,7 @@ function resolve(handlers: Required<MockOverrides>, ctx: MockContext): ApiResult
   if (path.endsWith('/instruments/search')) return handlers.search(ctx);
   if (path.includes('/jobs/')) return handlers.job(ctx);
   if (path.endsWith('/snapshot')) return handlers.snapshot(ctx);
+  if (path.endsWith('/bars')) return handlers.bars(ctx);
   if (path.endsWith('/documents')) return handlers.documents(ctx);
   if (path.endsWith('/analyses')) return handlers.analyses(ctx);
   if (path.endsWith('/predictions/latest')) return handlers.predictionLatest(ctx);

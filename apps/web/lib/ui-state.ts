@@ -20,6 +20,7 @@ export const UI_STATES = [
   'ok', // 正常
   'partial_data', // 部分数据缺失
   'quote_stale', // 行情过期
+  'quote_unavailable', // 暂无实时行情
   'provider_failed', // 数据源失败
   'model_unavailable', // 模型不可用
   'no_documents', // 无文档
@@ -58,6 +59,11 @@ export const STATE_DESCRIPTORS: Record<UiState, StateDescriptor> = {
     tone: 'warning',
     description: '行情已超过 180 秒未更新，不作为实时行情使用。',
   },
+  quote_unavailable: {
+    label: '暂无实时行情',
+    tone: 'neutral',
+    description: '当前没有可展示的实时报价；历史行情与实时行情分别展示。',
+  },
   provider_failed: {
     label: '数据源失败',
     tone: 'danger',
@@ -81,7 +87,7 @@ export const STATE_DESCRIPTORS: Record<UiState, StateDescriptor> = {
   market_closed: {
     label: '休市',
     tone: 'info',
-    description: '当前非交易时段，显示最新交易日的收盘数据。',
+    description: '当前非交易时段，实时行情暂停更新。',
   },
 };
 
@@ -132,6 +138,8 @@ export interface QuoteStatus {
   isRealtime: boolean;
   stale: boolean;
   closed: boolean;
+  unavailable: boolean;
+  availabilityLabel: string;
   ageSeconds: number | null;
 }
 
@@ -144,10 +152,12 @@ export function resolveQuoteStatus(
   market: MarketDTO | null | undefined,
 ): QuoteStatus {
   const closed = isMarketClosed(market);
+  const unavailable = quote == null;
   const stale = quote?.freshness === 'stale';
   const states: UiState[] = [];
 
   if (closed) states.push('market_closed');
+  if (unavailable) states.push('quote_unavailable');
   if (stale) states.push('quote_stale');
 
   const inContinuousTrading =
@@ -160,14 +170,21 @@ export function resolveQuoteStatus(
 
   let priceLabel: string;
   if (closed) {
-    priceLabel = '最新收盘价';
+    priceLabel = '最近行情';
   } else if (stale) {
-    priceLabel = '最后成交价（可能已过期）';
+    priceLabel = '最近行情（可能已过期）';
   } else if (isRealtime) {
     priceLabel = '最新价';
   } else {
-    priceLabel = '最后成交价';
+    priceLabel = '最近行情';
   }
+
+  const availabilityLabel =
+    market?.phase === 'pre_open' || market?.phase === 'call_auction'
+      ? '盘前，等待首次行情'
+      : closed
+        ? '非交易时段，暂无实时行情'
+        : '暂无实时行情';
 
   return {
     states,
@@ -175,6 +192,8 @@ export function resolveQuoteStatus(
     isRealtime,
     stale,
     closed,
+    unavailable,
+    availabilityLabel,
     ageSeconds: quote?.age_seconds ?? null,
   };
 }

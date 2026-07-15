@@ -3,7 +3,7 @@
 只有 ``services/openbb_extensions`` 允许直连第三方 URL（spec §4.2）。
 
 失败一律抛 ``ProviderUpstreamError`` —— 不重试到别的来源、不返回缓存、不返回空列表冒充
-"今天没有公告"（spec §5.2：不做静默备用源；spec §8：不得静默使用缓存冒充新数据）。
+"今天没有公告"（spec §8：不得静默使用缓存冒充新数据）。
 """
 
 from __future__ import annotations

@@ -104,7 +104,7 @@ async def test_quotes_rate_limited(gateway: OpenBBHttpGateway, now: datetime) ->
 @respx.mock
 async def test_quotes_server_error(gateway: OpenBBHttpGateway, now: datetime) -> None:
     respx.get(QUOTE_URL).mock(return_value=httpx.Response(500, json=load("openbb_error_500.json")))
-    with pytest.raises(ProviderUnavailable, match="500"):
+    with pytest.raises(ProviderUnavailable, match=r"500.*Internal Server Error"):
         await gateway.get_quotes(["600519"], now)
 
 
@@ -143,6 +143,18 @@ async def test_quotes_ignores_unrequested_symbols(gateway: OpenBBHttpGateway, no
 async def test_quotes_rejects_empty_symbols(gateway: OpenBBHttpGateway, now: datetime) -> None:
     with pytest.raises(InvalidArgument):
         await gateway.get_quotes([], now)
+
+
+@respx.mock
+async def test_quotes_accepts_full_csi300_size_and_rejects_larger_request(
+    gateway: OpenBBHttpGateway, now: datetime
+) -> None:
+    respx.get(QUOTE_URL).mock(return_value=httpx.Response(200, json=load("openbb_quote_ok.json")))
+    quotes = await gateway.get_quotes(["600519"] * 300, now)
+    assert [quote.symbol for quote in quotes] == ["600519"]
+
+    with pytest.raises(InvalidArgument, match="最多请求 300"):
+        await gateway.get_quotes(["600519"] * 301, now)
 
 
 async def test_quotes_rejects_bad_symbol(gateway: OpenBBHttpGateway, now: datetime) -> None:

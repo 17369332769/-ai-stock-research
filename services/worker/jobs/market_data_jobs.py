@@ -10,8 +10,8 @@
     ingest_news             交易时段每 10 分钟，其他时段每 2 小时
     run_instrument_backfill 自选股首次添加时触发（三步：daily_bars → minute_bars → documents）
 
-全部作业幂等（落库层按主键 upsert）。任何一个数据源**连续失败 3 次进入降级状态**，
-``get_source_health()`` 暴露"具体失败源 + 最后成功时间"，供数据源状态页展示（spec §8 / §13.1）。
+全部作业幂等（落库层按主键 upsert）。健康状态按报价 / K 线 / 新闻能力分别记录，
+避免其中一种成功掩盖另一种失败；调度器的 JobHealth 快照供状态页展示（spec §8 / §13.1）。
 降级时**不使用缓存冒充新数据** —— 作业照常失败并记账。
 """
 
@@ -54,8 +54,13 @@ logger = logging.getLogger(__name__)
 
 # ── 数据源标识（与 provider 里的 source 常量一致）───────────────────────────────
 SOURCE_CSINDEX = "csindex"
-SOURCE_MARKET = "eastmoney_via_akshare"
 SOURCE_DISCLOSURE = "cninfo"
+
+# 同一发行方的不同接口故障域并不相同。健康键必须按能力拆分，否则 K 线成功会把
+# 报价的连续失败清零，产生“报价最后成功”的错误观感。
+HEALTH_MARKET_QUOTES = "eastmoney_quote_via_akshare"
+HEALTH_MARKET_BARS = "eastmoney_bars_via_akshare"
+HEALTH_MARKET_NEWS = "eastmoney_news_via_akshare"
 
 # 连续失败达到该次数即降级（spec §8）
 DEGRADED_AFTER_FAILURES = 3
@@ -235,7 +240,9 @@ async def ingest_watchlist_quotes() -> None:
         return
 
     async with create_gateway() as gateway:
-        quotes = await _guarded(SOURCE_MARKET, clock, lambda: gateway.get_quotes(symbols, now))
+        quotes = await _guarded(
+            HEALTH_MARKET_QUOTES, clock, lambda: gateway.get_quotes(symbols, now)
+        )
 
     missing = sorted(set(symbols) - {quote.symbol for quote in quotes})
     async with session_scope() as session:
@@ -267,7 +274,9 @@ async def ingest_minute_bars() -> None:
     async with create_gateway() as gateway:
         for symbol in symbols:
             bars = await _guarded(
-                SOURCE_MARKET, clock, partial(gateway.get_bars, symbol, "5m", start, now)
+                HEALTH_MARKET_BARS,
+                clock,
+                partial(gateway.get_bars, symbol, "5m", start, now),
             )
             if not bars:
                 continue
@@ -292,7 +301,9 @@ async def ingest_daily_bars() -> None:
     async with create_gateway() as gateway:
         for symbol in symbols:
             bars = await _guarded(
-                SOURCE_MARKET, clock, partial(gateway.get_bars, symbol, "1d", start, now)
+                HEALTH_MARKET_BARS,
+                clock,
+                partial(gateway.get_bars, symbol, "1d", start, now),
             )
             if not bars:
                 continue
@@ -342,7 +353,9 @@ async def ingest_news() -> None:
     async with create_gateway() as gateway:
         for symbol in symbols:
             documents = await _guarded(
-                SOURCE_MARKET, clock, partial(gateway.get_news, symbol, start, now)
+                HEALTH_MARKET_NEWS,
+                clock,
+                partial(gateway.get_news, symbol, start, now),
             )
             if not documents:
                 continue
@@ -387,6 +400,66 @@ async def _set_job(
         job.finished_at = now
     job.updated_at = now
     await session.flush()
+
+
+async def run_quote_refresh(job_id: uuid.UUID, symbol: str) -> None:
+    """只采集一只股票的最新行情，并把真实结果写回作业表。"""
+    clock = get_clock()
+    now = clock.now()
+    code = symbol.strip()
+
+    try:
+        async with session_scope() as session:
+            if await session.get(Instrument, code) is None:
+                raise InstrumentNotFound(code)
+
+        async with create_gateway() as gateway:
+            quotes = await _guarded(
+                HEALTH_MARKET_QUOTES,
+                clock,
+                lambda: gateway.get_quotes([code], now),
+            )
+        quote = next((item for item in quotes if item.symbol == code), None)
+        if quote is None:
+            raise ProviderUnavailable(f"{code} 的唯一行情来源未返回报价")
+
+        async with session_scope() as session:
+            report = await upsert_quotes(session, [quote], now)
+            await _set_job(
+                session,
+                job_id,
+                clock.now(),
+                status=JobStatus.SUCCEEDED,
+                current_step="fetch_quote",
+                completed_steps=1,
+                warnings=report.as_warnings(),
+                finished=True,
+            )
+        _log_report(f"手动刷新 {code} 行情", report)
+    except AppError as exc:
+        async with session_scope() as session:
+            await _set_job(
+                session,
+                job_id,
+                clock.now(),
+                status=JobStatus.FAILED,
+                error_code=exc.code.value,
+                error_message=exc.message,
+                finished=True,
+            )
+        raise
+    except Exception as exc:
+        async with session_scope() as session:
+            await _set_job(
+                session,
+                job_id,
+                clock.now(),
+                status=JobStatus.FAILED,
+                error_code=ErrorCode.PROVIDER_UNAVAILABLE.value,
+                error_message=f"{type(exc).__name__}: {exc}",
+                finished=True,
+            )
+        raise ProviderUnavailable(f"刷新 {code} 行情失败：{exc}") from exc
 
 
 async def run_instrument_backfill(job_id: uuid.UUID, symbol: str) -> None:
@@ -435,7 +508,9 @@ async def run_instrument_backfill(job_id: uuid.UUID, symbol: str) -> None:
             # step 1：日线（3 年）—— 失败即整项失败
             daily_start = now - timedelta(days=365 * BACKFILL_DAILY_YEARS)
             bars = await _guarded(
-                SOURCE_MARKET, clock, lambda: gateway.get_bars(code, "1d", daily_start, now)
+                HEALTH_MARKET_BARS,
+                clock,
+                lambda: gateway.get_bars(code, "1d", daily_start, now),
             )
             async with session_scope() as session:
                 report = await upsert_bars(session, bars, now)
@@ -455,7 +530,9 @@ async def run_instrument_backfill(job_id: uuid.UUID, symbol: str) -> None:
             minute_start = now - timedelta(days=BACKFILL_MINUTE_DAYS)
             try:
                 minute_bars = await _guarded(
-                    SOURCE_MARKET, clock, lambda: gateway.get_bars(code, "5m", minute_start, now)
+                    HEALTH_MARKET_BARS,
+                    clock,
+                    lambda: gateway.get_bars(code, "5m", minute_start, now),
                 )
             except AppError as exc:
                 warning = {
@@ -497,7 +574,9 @@ async def run_instrument_backfill(job_id: uuid.UUID, symbol: str) -> None:
                 SOURCE_DISCLOSURE, clock, lambda: gateway.get_announcements(code, doc_start, now)
             )
             news = await _guarded(
-                SOURCE_MARKET, clock, lambda: gateway.get_news(code, doc_start, now)
+                HEALTH_MARKET_NEWS,
+                clock,
+                lambda: gateway.get_news(code, doc_start, now),
             )
             async with session_scope() as session:
                 report = await upsert_documents(session, [*announcements, *news], now)
@@ -554,5 +633,6 @@ __all__ = [
     "ingest_watchlist_quotes",
     "reset_source_health",
     "run_instrument_backfill",
+    "run_quote_refresh",
     "sync_csi300_universe",
 ]

@@ -11,7 +11,7 @@ from apps.api.app.models.tables import Quote
 
 
 async def latest(session: AsyncSession, symbol: str) -> Quote | None:
-    """最后一条行情。返回 None ⇒ **从未取得行情** ⇒ 调用方必须 424，不得编造价格。"""
+    """最后一条实时行情；从未取得时返回 None。"""
     result = await session.execute(
         select(Quote).where(Quote.symbol == symbol).order_by(Quote.observed_at.desc()).limit(1)
     )

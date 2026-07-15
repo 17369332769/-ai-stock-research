@@ -1,6 +1,7 @@
 'use client';
 
 import { Section } from '@/components/Section';
+import { SourceDisplay } from '@/components/SourceDisplay';
 import { StateNotice } from '@/components/StateNotice';
 import { getSystemStatus } from '@/lib/api/endpoints';
 import { DATA_SOURCE_STATUS_LABELS, MODEL_STATUS_LABELS } from '@/lib/constants';
@@ -12,6 +13,7 @@ import type { DataSourceStatus, ModelConnectionStatus } from '@/lib/api/types';
 
 const SOURCE_TONE: Record<DataSourceStatus, string> = {
   ok: 'badge--ok',
+  pending: 'badge--neutral',
   degraded: 'badge--warning',
   failed: 'badge--danger',
 };
@@ -48,7 +50,7 @@ export default function DataSourcesPage() {
           state="provider_failed"
           detail={`以下数据源当前失败：${failedSources
             .map((source) => source.name)
-            .join('、')}。已有历史数据仍可查看。`}
+            .join('、')}。请查看失败原因与最后成功时间。`}
         />
       ) : null}
 
@@ -96,10 +98,28 @@ export default function DataSourcesPage() {
                   </span>
                 </div>
                 <dl>
+                  <dt>实际来源</dt>
+                  <dd data-testid="source-active-source">
+                    <SourceDisplay source={source.active_source} />
+                  </dd>
+                  <dt>数据覆盖</dt>
+                  <dd data-testid="source-coverage">
+                    {source.coverage}/{source.total}
+                  </dd>
                   <dt>最后成功时间</dt>
                   <dd data-testid="source-last-success">{formatDateTime(source.last_success_at)}</dd>
+                  <dt>下次运行</dt>
+                  <dd data-testid="source-next-run">{formatDateTime(source.next_run_at)}</dd>
+                  <dt>采集作业</dt>
+                  <dd>{source.job_count}</dd>
                   <dt>连续失败次数</dt>
                   <dd data-testid="source-failures">{source.consecutive_failures}</dd>
+                  {source.failing_jobs.length > 0 ? (
+                    <>
+                      <dt>异常作业</dt>
+                      <dd data-testid="source-failing-jobs">{source.failing_jobs.join('、')}</dd>
+                    </>
+                  ) : null}
                   {source.last_error_code ? (
                     <>
                       <dt>失败原因</dt>

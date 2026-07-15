@@ -22,15 +22,17 @@ from apps.api.app.core.errors import (
     InvalidArgument,
     NotCurrentUniverseMember,
 )
+from apps.api.app.core.pagination import Cursor
 from apps.api.app.models.tables import Instrument, WatchlistItem
 from apps.api.app.repositories import instruments as instruments_repo
 from apps.api.app.repositories import jobs as jobs_repo
 from apps.api.app.repositories import quotes as quotes_repo
 from apps.api.app.repositories import watchlist as watchlist_repo
 from apps.api.app.schemas.jobs import JobDTO
-from apps.api.app.schemas.quotes import QuoteDTO
+from apps.api.app.schemas.quotes import MarketDTO, QuoteDTO
 from apps.api.app.schemas.watchlist import WatchlistAddedDTO, WatchlistItemDTO
 from apps.api.app.services.freshness import to_quote_dto
+from apps.api.app.services.market_state import current_market
 
 
 class WatchlistIntegrityError(RuntimeError):
@@ -46,6 +48,33 @@ class AddResult:
 
 async def list_watchlist(session: AsyncSession, now: datetime) -> list[WatchlistItemDTO]:
     items = await watchlist_repo.list_items(session)
+    return await _hydrate_items(session, items, now)
+
+
+async def list_watchlist_page(
+    session: AsyncSession,
+    now: datetime,
+    *,
+    limit: int,
+    cursor: Cursor | None,
+    query: str | None,
+) -> tuple[list[WatchlistItemDTO], Cursor | None, bool]:
+    items, has_more = await watchlist_repo.list_page(
+        session,
+        limit=limit,
+        cursor=cursor,
+        query=query,
+    )
+    rows = await _hydrate_items(session, items, now)
+    next_cursor = watchlist_repo.build_page_cursor(items[-1]) if has_more and items else None
+    return rows, next_cursor, has_more
+
+
+async def _hydrate_items(
+    session: AsyncSession,
+    items: list[WatchlistItem],
+    now: datetime,
+) -> list[WatchlistItemDTO]:
     if not items:
         return []
 
@@ -55,6 +84,7 @@ async def list_watchlist(session: AsyncSession, now: datetime) -> list[Watchlist
         session, CSI300_CODE, to_shanghai(now).date(), symbols
     )
     rows = await instruments_repo.get_many(session, symbols)
+    market = current_market(now)
 
     result: list[WatchlistItemDTO] = []
     for item in items:
@@ -73,6 +103,7 @@ async def list_watchlist(session: AsyncSession, now: datetime) -> list[Watchlist
                 instrument,
                 is_current_member=item.symbol in members,
                 quote=to_quote_dto(quote_row, now) if quote_row is not None else None,
+                market=market,
             )
         )
     return result
@@ -114,7 +145,13 @@ async def add_to_watchlist(session: AsyncSession, symbol: str, now: datetime) ->
         status_code = 202  # spec §7.1：首次添加返回 202 + 回补任务
 
     payload = WatchlistAddedDTO(
-        watchlist_item=_to_item_dto(item, instrument, is_current_member=True, quote=None),
+        watchlist_item=_to_item_dto(
+            item,
+            instrument,
+            is_current_member=True,
+            quote=None,
+            market=current_market(now),
+        ),
         backfill_job=job_dto,
     )
     return AddResult(payload=payload, status_code=status_code)
@@ -152,6 +189,7 @@ def _to_item_dto(
     *,
     is_current_member: bool,
     quote: QuoteDTO | None,
+    market: MarketDTO,
 ) -> WatchlistItemDTO:
     return WatchlistItemDTO(
         symbol=item.symbol,
@@ -160,4 +198,5 @@ def _to_item_dto(
         created_at=to_shanghai(item.created_at),
         is_current_universe_member=is_current_member,
         quote=quote,
+        market=market,
     )

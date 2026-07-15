@@ -63,3 +63,13 @@ class PendingBackfillDTO(BaseDTO):
     """
 
     backfill_job: JobDTO
+
+
+class QuoteRefreshDTO(BaseDTO):
+    """单股最新行情刷新请求。作业执行结果继续通过 ``GET /jobs/{id}`` 查询。"""
+
+    job: JobDTO
+    source: str
+    estimated_seconds: int = Field(ge=1)
+    retry_after_seconds: int = Field(ge=0)
+    requested_at: datetime

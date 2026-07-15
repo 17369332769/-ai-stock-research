@@ -46,8 +46,8 @@ AKShare ─┐                                                                  
 - 业务代码（`apps/api`、`services/prediction`、`services/research`、`services/worker`）
   **不得** import akshare、不得直接 httpx 打第三方 URL。
 - 违规由 `apps/api/tests/integration/test_no_direct_third_party_calls.py` 断言（验收 §15.19）。
-- **不做静默备用源**（spec §5.2）：主源失败 → `ProviderUnavailable`（HTTP 424）→ UI 显示
-  stale/unavailable。**绝不**用另一个源的数据顶替，避免不同口径混合。
+- **固定来源契约**（spec §5.2）：每类数据只绑定一个明确来源。调用失败 →
+  `ProviderUnavailable`（HTTP 424）→ UI 显示 stale/unavailable，异常保持原始语义。
 
 ---
 
@@ -149,12 +149,23 @@ GET /api/v1/news/company?provider=akshare&symbol=600519&start_date=2026-07-01&en
 
 | 故障 | 行为 |
 |---|---|
-| HTTP 429 / 5xx / 超时（30s）/ 网络错误 | `ProviderUnavailable`（424）。**不切源、不返回缓存** |
+| HTTP 429 / 5xx / 超时（30s）/ 网络错误 | `ProviderUnavailable`（424），并保留脱敏、截断后的 OpenBB `detail`。**不切源、不返回历史值冒充新报价** |
 | 字段缺失 / 类型改变 / 非有限数值 | `ProviderUnavailable` + 明确指出是哪个字段。**绝不用 0 或上一条填** |
 | 脏数据（负价、`prev_close=0`、high<low）| 网关原样透出 → `normalization.validate_*` **逐条拒收**并记入 `IngestReport.rejected` → 写进 `jobs.warnings` 与日志。整批全脏 → `ProviderUnavailable` |
 | 上游未返回某个自选股 | 不补零、不复制上一条；该标的自然进入 stale → 超过 `QUOTE_STALE_SECONDS`(180s) 显示 stale，从未取得则 API 返回 424 |
 | 5 分钟线不可得（新股/停牌/超出上游保留窗口）| **回补作业只记 warning，不使整项回补失败**（spec §7.1）|
-| 连续失败 3 次 | 数据源进入**降级状态**，`get_source_health()` 暴露失败源 + 最后成功时间（spec §8）|
+| 连续失败 3 次 | 数据源进入**降级状态**并冷却 300 秒，之后只做一次恢复探测；状态页展示失败作业 + 最后成功时间（spec §8）|
+
+`stock_zh_a_spot_em` 每次会分页下载整市场。OpenBB Provider 对成功结果保留 12 秒的
+**进程内瞬时快照**并合并并发请求；快照不会落盘、失败不会缓存、进程重启即清空。
+其作用只是避免定时刷新和多个手动刷新重复抓取整市场，不会在上游失败时返回旧行情。
+
+### 2.7 容器代理
+
+OpenBB 是唯一允许访问外部数据源的容器。若宿主机使用 Clash/V2Ray，不能把
+`127.0.0.1:端口` 直接交给容器——容器的 loopback 不是 Windows。应先让代理监听一个
+Docker VM 可达的地址，再通过 `.env` 设置 `OPENBB_HTTP_PROXY` / `OPENBB_HTTPS_PROXY`。
+不需要代理时保持为空；`OPENBB_NO_PROXY` 必须保留内部服务名，避免内部 REST 绕到外部代理。
 
 ---
 
@@ -218,24 +229,14 @@ entry point 并重建路由表；而公告的字段形态（标题/正文/时间
 
 网关据此写入 `document_type`，两种口径不会混淆。
 
-### 3.4 未接线的备用入口（**不得作为静默 fallback**）
-
-| 来源 | URL | 状态 |
-|---|---|---|
-| 上交所 | `http://www.sse.com.cn/disclosure/listedinfo/announcement/` | 登记备查，**未接线** |
-| 深交所 | `https://www.szse.cn/disclosure/listed/notice/index.html` | 登记备查，**未接线** |
-
-巨潮同时覆盖沪深两市且是法定披露平台，因此**不需要**在三者之间做静默切换。
-spec §5.2 明令禁止静默备用源：**巨潮失败即 unavailable**。
-
-### 3.5 去重
+### 3.4 去重
 
 - **公告按 `content_hash` 去重**：`sha256(document_type | symbol | title | body_text)`。
   **不含 URL** —— 同一份公告可能在不同板块页以不同 URL 挂出。
 - 标题做 NFKC 归一化 + 空白折叠：上游换排版不该产生「新公告」。
 - `documents.content_hash` 有 UNIQUE 约束 → DB 层幂等兜底。
 
-### 3.6 降级策略
+### 3.5 降级策略
 
 同 §2.6（429/5xx/超时/非 JSON/字段缺失 → `ProviderUnavailable`；连续失败 3 次降级）。
 上游对「该窗口无公告」返回 `announcements: null` —— 这是**合法空值**，返回 `[]`，不是错误。
@@ -258,12 +259,10 @@ spec §5.2 明令禁止静默备用源：**巨潮失败即 unavailable**。
 ### 4.1 上游接口
 
 ```
-GET https://oss-ch.csindex.com.cn/static/html/csindex/public/uploads/file/autofile/cons/000300cons.xls        （主）
-GET https://csi-web-dev.oss-cn-shanghai-finance-1-pub.aliyuncs.com/.../000300cons.xls                        （OSS 镜像）
+GET https://oss-ch.csindex.com.cn/static/html/csindex/public/uploads/file/autofile/cons/000300cons.xls
 ```
 
-两个地址是**同一发行方的主站与 OSS 镜像**，口径完全一致 —— 在它们之间重试**不违反**
-「不做静默备用源」（那条规则禁止的是**跨发行方/跨口径**顶替）。
+运行时只请求上面的中证指数官方成分文件；网络或内容异常直接上报。
 
 指数调整公告（人工核对入口，MVP 不自动解析 PDF）：`https://www.csindex.com.cn/#/about-us/notice`
 
@@ -302,15 +301,15 @@ GET https://csi-web-dev.oss-cn-shanghai-finance-1-pub.aliyuncs.com/.../000300con
 ### 4.4 当前成分 vs 历史成分（**幸存者偏差防线**）
 
 spec §9.3：训练样本按每个交易日**当时有效**的 CSI300 历史成员生成，
-**禁止用当前 300 只股票回填全部历史**。因此有两条语义不同的路径，**绝不互相顶替**：
+**禁止用当前 300 只股票填充历史样本**。因此有两条语义不同、彼此独立的路径：
 
 | `as_of` | 数据来源 | 用途 |
 |---|---|---|
 | `>= 今天`（或缺省）| 中证官网**当期成分文件** | 选股（`/universes/CSI300/instruments`、搜索、自选股成员校验）|
 | `< 今天` | **官方历史成分快照归档** | 训练取样、回测 |
 
-**快照缺失 → `SnapshotNotFound`（fail closed）。绝不回退到当前成分。**
-若回退，2024 年的训练样本就会包含 2026 年才调入的股票 —— 回测会好看得离谱且完全不可信。
+**快照缺失 → `SnapshotNotFound`（fail closed）。当前成分只用于当期成员查询。**
+否则，2024 年的训练样本会包含 2026 年才调入的股票，形成严重的幸存者偏差。
 由 `test_csi300.py::test_missing_historical_snapshot_fails_closed_not_current` 锁死。
 
 ### 4.5 历史快照归档
@@ -441,8 +440,10 @@ ERROR: ResolutionImpossible
 | `ingest_news` | 交易时段每 10 分钟，其他时段每 2 小时 | 按 URL 和内容哈希去重 |
 | `run_instrument_backfill` | 自选股首次添加时 | 三步：`daily_bars` → `minute_bars` → `documents`；**分钟数据不可得只记 warning，不使整项失败** |
 
-**降级状态**：任一数据源**连续失败 3 次** → `SourceHealth.degraded = True`。
-`get_source_health()` 返回每个源的 `degraded` / `consecutive_failures` / `last_success_at` /
-`last_error`，供数据源状态页展示「具体失败源 + 最后成功时间」。
+**降级状态**：每个调度作业独立累计连续失败；达到 3 次后进入 300 秒冷却，冷却结束
+只做一次恢复探测。Worker 将 `JobHealth` 原子写入 `/state/worker_health.json`，状态页按
+Provider 聚合并列出具体失败作业。进程内诊断台账进一步把东方财富拆成 quote / bars / news
+三个健康键，避免 K 线成功掩盖报价失败。
 
-**绝不静默使用缓存冒充新数据**（spec §8）：降级时作业照常失败并记账，UI 显示 stale/unavailable。
+**绝不静默使用旧值冒充新数据**（spec §8）：降级时 UI 显示 stale/unavailable；12 秒瞬时
+报价快照只用于合并同时到达的整市场请求，过期或抓取失败时不会返回旧报价。

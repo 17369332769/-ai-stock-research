@@ -14,6 +14,7 @@
     "e2e:server": "next build && next start -p 3100"
   },
   "dependencies": {
+    "echarts": "5.6.0",
     "next": "15.5.20",
     "react": "19.1.0",
     "react-dom": "19.1.0"

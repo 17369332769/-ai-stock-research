@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import timedelta
 from pathlib import Path
 
 from apps.api.app.core.clock import FixedClock
 from services.worker.runner import (
     DEGRADE_AFTER_CONSECUTIVE_FAILURES,
+    DEGRADED_COOLDOWN_SECONDS,
     HealthRegistry,
     JobRunner,
     RetryPolicy,
@@ -131,7 +133,9 @@ async def test_degraded_after_three_consecutive_failures(
     assert providers["akshare"]["last_success_at"] == last_success.isoformat()
 
 
-async def test_success_clears_degraded_state(runner: JobRunner, registry: HealthRegistry) -> None:
+async def test_degraded_job_cools_down_then_success_clears_state(
+    runner: JobRunner, registry: HealthRegistry, clock: FixedClock
+) -> None:
     registry.register("quotes", "自选股报价", "akshare")
     failing = True
 
@@ -144,7 +148,13 @@ async def test_success_clears_degraded_state(runner: JobRunner, registry: Health
     assert registry.get("quotes").degraded is True
 
     failing = False
-    await runner.run(job_id="quotes", fn=job)
+    skipped = await runner.run(job_id="quotes", fn=job)
+    assert skipped.skipped == "degraded_cooldown"
+    assert registry.get("quotes").skipped_count == 1
+
+    clock.advance(timedelta(seconds=DEGRADED_COOLDOWN_SECONDS))
+    recovered = await runner.run(job_id="quotes", fn=job)
+    assert recovered.ok is True
     assert registry.get("quotes").degraded is False
     assert registry.get("quotes").status == "healthy"
 

@@ -20,7 +20,7 @@ test.describe('E2E-7 数据源故障降级', () => {
 
     // 不把缺失行情伪装成实时
     await expect(page.getByTestId('badge-realtime')).toHaveCount(0);
-    await expect(page.getByTestId('quote-missing')).toContainText('暂无行情数据');
+    await expect(page.getByTestId('quote-missing')).toContainText('暂无实时行情');
 
     // 已有历史数据仍可访问（spec §15）
     await expect(page.getByTestId('documents-list')).toBeVisible();
@@ -49,7 +49,7 @@ test.describe('E2E-7 数据源故障降级', () => {
     await expect(page.getByTestId('state-provider_failed').first()).toContainText('AKShare 行情');
 
     // 失败源卡片：状态、最后成功时间、连续失败次数、失败原因
-    const failedCard = page.locator('[data-testid="data-source-card"][data-source-key="akshare_quotes"]');
+    const failedCard = page.locator('[data-testid="data-source-card"][data-source-key="akshare"]');
     await expect(failedCard).toHaveAttribute('data-status', 'failed');
     await expect(failedCard.getByTestId('source-status')).toContainText('失败');
     await expect(failedCard.getByTestId('source-last-success')).toContainText('09:20');

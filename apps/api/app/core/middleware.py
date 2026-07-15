@@ -18,6 +18,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import Response
 
 from apps.api.app.core.errors import ERROR_STATUS, AppError, ErrorCode
@@ -25,6 +26,10 @@ from apps.api.app.core.logging import METRICS, get_logger, get_request_id, set_r
 from apps.api.app.schemas.common import ErrorBody, ErrorResponse
 
 REQUEST_ID_HEADER = "X-Request-Id"
+
+# 浏览器中的 Next.js 前端与 API 分别监听 3000/8000，属于不同 origin。
+# 仅放行本机前端，避免把无登录的研究 API 暴露给任意网页脚本。
+LOCAL_WEB_ORIGINS = ["http://127.0.0.1:3000", "http://localhost:3000"]
 
 logger = get_logger(__name__)
 
@@ -140,6 +145,13 @@ async def unhandled_error_handler(request: Request, exc: Exception) -> JSONRespo
 
 def install_middleware(app: FastAPI) -> None:
     app.add_middleware(RequestContextMiddleware)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=LOCAL_WEB_ORIGINS,
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", REQUEST_ID_HEADER],
+        expose_headers=[REQUEST_ID_HEADER],
+    )
     app.add_exception_handler(AppError, app_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)

@@ -7,7 +7,7 @@ import json
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from apps.api.app.core.middleware import REQUEST_ID_HEADER
+from apps.api.app.core.middleware import LOCAL_WEB_ORIGINS, REQUEST_ID_HEADER
 from apps.api.app.main import create_app
 from apps.api.scripts.export_openapi import SNAPSHOT_PATH, dumps, generate_openapi
 
@@ -23,6 +23,28 @@ async def test_request_id_is_echoed_when_supplied(client: AsyncClient) -> None:
     )
     assert response.headers[REQUEST_ID_HEADER] == "caller-supplied-id"
     assert response.json()["request_id"] == "caller-supplied-id"
+
+
+async def test_local_web_origin_can_read_api() -> None:
+    """3000 端口的本地前端必须能跨 origin 调用 8000 端口的 API。"""
+    app: FastAPI = create_app()
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    origin = LOCAL_WEB_ORIGINS[0]
+    async with AsyncClient(transport=transport, base_url="http://testserver") as http:
+        response = await http.get("/openapi.json", headers={"Origin": origin})
+        preflight = await http.options(
+            "/api/v1/watchlist",
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type",
+            },
+        )
+
+    assert response.headers["Access-Control-Allow-Origin"] == origin
+    assert response.headers["Access-Control-Expose-Headers"] == REQUEST_ID_HEADER
+    assert preflight.status_code == 200
+    assert "POST" in preflight.headers["Access-Control-Allow-Methods"]
 
 
 async def test_error_envelope_shape(client: AsyncClient) -> None:
@@ -107,6 +129,8 @@ def test_openapi_declares_every_spec_route() -> None:
         ("/api/v1/watchlist/order", "patch"),
         ("/api/v1/jobs/{job_id}", "get"),
         ("/api/v1/stocks/{symbol}/snapshot", "get"),
+        ("/api/v1/stocks/{symbol}/quote-refresh", "post"),
+        ("/api/v1/stocks/{symbol}/bars", "get"),
         ("/api/v1/stocks/{symbol}/documents", "get"),
         ("/api/v1/stocks/{symbol}/analyses", "get"),
         ("/api/v1/stocks/{symbol}/analyses/refresh", "post"),

@@ -12,7 +12,16 @@ from datetime import datetime
 from pydantic import Field
 
 from apps.api.app.core.enums import Freshness
+from apps.api.app.core.trading_calendar import MarketPhase
 from apps.api.app.schemas.common import BaseDTO
+
+
+class MarketDTO(BaseDTO):
+    """由 API 判定的市场时段；前端不读取本机时钟自行推断。"""
+
+    phase: MarketPhase
+    is_trading_day: bool
+    latest_trading_day: str
 
 
 class QuoteDTO(BaseDTO):
@@ -33,6 +42,11 @@ class QuoteDTO(BaseDTO):
     amount: float | None = None
     volume_ratio: float | None = Field(default=None, description="量比（F2）")
     observed_at: datetime = Field(description="数据源观测时间（Asia/Shanghai）")
+    market_time: datetime | None = Field(
+        default=None,
+        description="上游明确提供的行情时间；当前来源未提供时为 null",
+    )
+    fetched_at: datetime = Field(description="本系统取得该行情的时间（Asia/Shanghai）")
     source: str
     source_url: str | None = None
     freshness: Freshness
@@ -55,7 +69,11 @@ class SnapshotDTO(BaseDTO):
 
     symbol: str
     name: str
-    quote: QuoteDTO
+    quote: QuoteDTO | None = Field(
+        default=None,
+        description="实时行情尚未取得时为 null；历史行情不填入此字段",
+    )
+    market: MarketDTO
     relative_strength: RelativeStrengthDTO | None = None
     latest_anomaly_analysis_id: uuid.UUID | None = None
     latest_predictions: list[uuid.UUID] = Field(

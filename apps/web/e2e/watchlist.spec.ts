@@ -22,7 +22,7 @@ test.describe('E2E-1 沪深300选股', () => {
                     symbol: '600519',
                     name: '贵州茅台',
                     display_order: 0,
-                    in_current_universe: true,
+                    is_current_universe_member: true,
                     quote: null,
                     backfill_job: { ...BACKFILL_JOB_QUEUED, status: 'running', completed_steps: 1, current_step: 'minute_bars' },
                   },

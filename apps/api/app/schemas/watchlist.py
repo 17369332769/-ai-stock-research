@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from apps.api.app.schemas.common import BaseDTO
 from apps.api.app.schemas.jobs import JobDTO
-from apps.api.app.schemas.quotes import QuoteDTO
+from apps.api.app.schemas.quotes import MarketDTO, QuoteDTO
 
 SYMBOL_PATTERN = r"^\d{6}$"
 
@@ -31,6 +31,7 @@ class WatchlistItemDTO(BaseDTO):
     quote: QuoteDTO | None = Field(
         default=None, description="最新行情；从未取得行情时为 null（不编造默认值）"
     )
+    market: MarketDTO = Field(description="API 判定的当前市场时段")
 
 
 class AddWatchlistRequest(BaseModel):

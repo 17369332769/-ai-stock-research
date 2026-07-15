@@ -8,6 +8,7 @@
 import {
   getAnalogs,
   getAnalyses,
+  getBars,
   getDocuments,
   getLatestPrediction,
   getScorecard,
@@ -16,6 +17,8 @@ import {
 import type {
   AnalogDTO,
   AnalysisDTO,
+  BarDTO,
+  BarsMetaDTO,
   DocumentDTO,
   JobDTO,
   PredictionDTO,
@@ -44,6 +47,13 @@ export interface ResearchPageData {
   snapshotState: UiState | null;
   snapshotMessage: string | null;
   backfillJob: JobDTO | null;
+
+  dailyBars: BarDTO[];
+  dailyBarsMeta: BarsMetaDTO | null;
+  dailyBarsMessage: string | null;
+  minuteBars: BarDTO[];
+  minuteBarsMeta: BarsMetaDTO | null;
+  minuteBarsMessage: string | null;
 
   anomalies: AnalysisDTO[];
   anomalyMessage: string | null;
@@ -158,9 +168,31 @@ async function loadScorecards(models: string[]): Promise<{
 }
 
 export async function loadResearchPage(symbol: string): Promise<ResearchPageData> {
-  const [snapshotResult, anomalyResult, predictionSlots, documentsResult, documentAnalysesResult, analogsResult] =
+  const [snapshotResult, barsResult, minuteBarsResult, anomalyResult, predictionSlots, documentsResult, documentAnalysesResult, analogsResult] =
     await Promise.all([
       loadSnapshot(symbol),
+      getBars(symbol, '1d', 800)
+        .then((response) => ({
+          items: response.items,
+          meta: response.meta,
+          message: null as string | null,
+        }))
+        .catch((error: unknown) => ({
+          items: [] as BarDTO[],
+          meta: null as BarsMetaDTO | null,
+          message: errorMessage(error),
+        })),
+      getBars(symbol, '5m', 500)
+        .then((response) => ({
+          items: response.items,
+          meta: response.meta,
+          message: null as string | null,
+        }))
+        .catch((error: unknown) => ({
+          items: [] as BarDTO[],
+          meta: null as BarsMetaDTO | null,
+          message: errorMessage(error),
+        })),
       getAnalyses(symbol, 'anomaly')
         .then((response) => ({ items: response.items, message: null as string | null }))
         .catch((error: unknown) => ({ items: [] as AnalysisDTO[], message: errorMessage(error) })),
@@ -188,6 +220,13 @@ export async function loadResearchPage(symbol: string): Promise<ResearchPageData
     snapshotState: snapshotResult.state,
     snapshotMessage: snapshotResult.message,
     backfillJob: snapshotResult.job ?? predictionSlots.find((slot) => slot.job)?.job ?? null,
+
+    dailyBars: barsResult.items,
+    dailyBarsMeta: barsResult.meta,
+    dailyBarsMessage: barsResult.message,
+    minuteBars: minuteBarsResult.items,
+    minuteBarsMeta: minuteBarsResult.meta,
+    minuteBarsMessage: minuteBarsResult.message,
 
     anomalies: anomalyResult.items,
     anomalyMessage: anomalyResult.message,

@@ -20,7 +20,7 @@ from services.openbb_extensions.csi300_provider.client import (
     list_snapshots,
 )
 from services.openbb_extensions.csi300_provider.constants import (
-    CSINDEX_CONS_URLS,
+    CSINDEX_CONS_URL,
     ProviderDataError,
     ProviderUpstreamError,
     SnapshotNotFound,
@@ -96,7 +96,7 @@ def test_exchange_inference(symbol: str, expected: str) -> None:
 @respx.mock
 async def test_fetch_current_uses_official_source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CSI300_SNAPSHOT_DIR", str(tmp_path))
-    respx.get(CSINDEX_CONS_URLS[0]).mock(
+    respx.get(CSINDEX_CONS_URL).mock(
         return_value=httpx.Response(200, content=load_bytes("csindex_cons_tsv.txt"))
     )
     records = await get_current_constituents(AS_OF, observed_at=NOW)
@@ -104,52 +104,36 @@ async def test_fetch_current_uses_official_source(tmp_path: Path, monkeypatch: p
     assert len(records) == 300
     first = records[0]
     assert first["source"] == "csindex"
-    assert first["source_url"] == CSINDEX_CONS_URLS[0]
+    assert first["source_url"] == CSINDEX_CONS_URL
     assert first["observed_at"] == NOW
     assert first["as_of"] == AS_OF
     assert first["snapshot_date"] == date(2026, 6, 15)  # 成分表官方生效日 ≠ as_of
 
 
 @respx.mock
-async def test_fetch_current_falls_back_to_official_mirror() -> None:
-    """两个 URL 是同一发行方的主站与 OSS 镜像（口径一致），不是"另一个数据源"。"""
-    respx.get(CSINDEX_CONS_URLS[0]).mock(return_value=httpx.Response(500))
-    respx.get(CSINDEX_CONS_URLS[1]).mock(
-        return_value=httpx.Response(200, content=load_bytes("csindex_cons_tsv.txt"))
-    )
-    payload, url, _ = await fetch_current()
-    assert url == CSINDEX_CONS_URLS[1]
-    assert payload
-
-
-@respx.mock
-async def test_all_official_urls_down_fails_closed() -> None:
-    for url in CSINDEX_CONS_URLS:
-        respx.get(url).mock(return_value=httpx.Response(503))
+async def test_official_url_down_fails_closed() -> None:
+    respx.get(CSINDEX_CONS_URL).mock(return_value=httpx.Response(503))
     with pytest.raises(ProviderUpstreamError, match="不可用"):
         await fetch_current()
 
 
 @respx.mock
 async def test_rate_limited_fails_closed() -> None:
-    for url in CSINDEX_CONS_URLS:
-        respx.get(url).mock(return_value=httpx.Response(429))
+    respx.get(CSINDEX_CONS_URL).mock(return_value=httpx.Response(429))
     with pytest.raises(ProviderUpstreamError, match="429"):
         await fetch_current()
 
 
 @respx.mock
 async def test_timeout_fails_closed() -> None:
-    for url in CSINDEX_CONS_URLS:
-        respx.get(url).mock(side_effect=httpx.ReadTimeout("timed out after 30s"))
+    respx.get(CSINDEX_CONS_URL).mock(side_effect=httpx.ReadTimeout("timed out after 30s"))
     with pytest.raises(ProviderUpstreamError, match="超时"):
         await fetch_current()
 
 
 @respx.mock
 async def test_empty_body_fails_closed() -> None:
-    for url in CSINDEX_CONS_URLS:
-        respx.get(url).mock(return_value=httpx.Response(200, content=b""))
+    respx.get(CSINDEX_CONS_URL).mock(return_value=httpx.Response(200, content=b""))
     with pytest.raises(ProviderUpstreamError, match="响应体为空"):
         await fetch_current()
 
@@ -193,7 +177,7 @@ def test_snapshot_date_mismatch_is_rejected(tmp_path: Path) -> None:
 async def test_successful_fetch_archives_snapshot(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """write-through 归档：每次成功抓取都留一份官方快照，历史越跑越全。"""
     monkeypatch.setenv("CSI300_SNAPSHOT_DIR", str(tmp_path))
-    respx.get(CSINDEX_CONS_URLS[0]).mock(
+    respx.get(CSINDEX_CONS_URL).mock(
         return_value=httpx.Response(200, content=load_bytes("csindex_cons_tsv.txt"))
     )
     await get_current_constituents(AS_OF, observed_at=NOW)

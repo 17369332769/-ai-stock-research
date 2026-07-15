@@ -23,7 +23,7 @@ import re
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Final
 
@@ -38,6 +38,9 @@ SleepFn = Callable[[float], Awaitable[None]]
 # spec §8：数据源连续失败 3 次后进入降级状态。
 DEGRADE_AFTER_CONSECUTIVE_FAILURES: Final[int] = 3
 
+# 降级后不再按原始高频调度持续轰击上游；冷却结束后允许一次探测调用，成功即恢复。
+DEGRADED_COOLDOWN_SECONDS: Final[int] = 300
+
 # 健康快照文件名（API 侧按此名只读读取）。
 HEALTH_FILENAME: Final[str] = "worker_health.json"
 
@@ -45,13 +48,13 @@ DEFAULT_STATE_DIR: Final[str] = "/state"
 
 
 def state_dir() -> Path:
-    """worker 状态目录。容器内为只读挂载给 API 的 /state；本机开发回落到 ./.worker-state。"""
+    """worker 状态目录。容器由配置指定 /state；本机开发默认使用 data/worker-state。"""
     raw = os.getenv("WORKER_STATE_DIR", DEFAULT_STATE_DIR)
     path = Path(raw)
     try:
         path.mkdir(parents=True, exist_ok=True)
     except OSError:
-        path = Path("data/worker-state")  # 本机开发回落（data/ 已在 .gitignore）
+        path = Path("data/worker-state")  # 本机开发默认目录（data/ 已在 .gitignore）
         path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -345,6 +348,28 @@ class JobRunner:
             self.registry.record_skip(job_id, "provider_disabled")
             return RunResult(job_id, run_id, ok=False, attempts=0, duration_ms=0, skipped="provider_disabled")
 
+        now = get_clock().now()
+        if (
+            health.degraded
+            and health.last_failure_at is not None
+            and now < health.last_failure_at + timedelta(seconds=DEGRADED_COOLDOWN_SECONDS)
+        ):
+            self.registry.record_skip(job_id, "degraded_cooldown")
+            self.registry.persist()
+            logger.warning(
+                "作业 %s 处于降级冷却期，跳过本轮 tick（%ds 后探测）",
+                job_id,
+                DEGRADED_COOLDOWN_SECONDS,
+            )
+            return RunResult(
+                job_id,
+                run_id,
+                ok=False,
+                attempts=0,
+                duration_ms=0,
+                skipped="degraded_cooldown",
+            )
+
         # 作业锁：同一作业不并发运行（spec §5.1 "作业锁"）。上一轮还在跑（例如报价正在退避重试）
         # 时直接跳过本轮，而不是排队堆积。
         lock = self._locks.setdefault(job_id, asyncio.Lock())
@@ -421,6 +446,7 @@ class JobRunner:
 
 
 __all__ = [
+    "DEGRADED_COOLDOWN_SECONDS",
     "DEGRADE_AFTER_CONSECUTIVE_FAILURES",
     "HEALTH_FILENAME",
     "NO_RETRY",

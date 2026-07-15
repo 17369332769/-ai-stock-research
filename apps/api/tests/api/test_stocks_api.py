@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+from decimal import Decimal
+from uuid import UUID
 
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from apps.api.app.models.tables import Bar, Job
 from apps.api.tests.conftest import (
     AT_0950,
     OTHER_SYMBOL,
@@ -36,6 +39,8 @@ async def test_snapshot_shape_matches_spec(client: AsyncClient, session: AsyncSe
     assert body["symbol"] == SYMBOL
     assert body["name"] == "贵州茅台"
     assert body["quote"]["source"] == "eastmoney_via_akshare"
+    assert body["quote"]["market_time"] is None
+    assert body["quote"]["fetched_at"] == body["quote"]["observed_at"]
     assert body["quote"]["freshness"] == "fresh"
     assert isinstance(body["quote"]["price"], float)
     assert body["latest_predictions"] == []
@@ -57,16 +62,21 @@ async def test_snapshot_stale_quote_returns_200_with_age(
     assert quote["age_seconds"] == 600
 
 
-async def test_snapshot_without_any_quote_returns_424(
+async def test_snapshot_without_any_quote_returns_explicit_empty_realtime_state(
     client: AsyncClient, session: AsyncSession
 ) -> None:
-    """从未取得行情 ⇒ 424 PROVIDER_UNAVAILABLE（绝不返回默认价格）。"""
+    """没有实时报价时仍返回股票身份，但 quote 必须为 null，不能填入其他价格。"""
     await setup_member(session)
 
     response = await client.get(f"/api/v1/stocks/{SYMBOL}/snapshot")
 
-    assert response.status_code == 424
-    assert response.json()["error"]["code"] == "PROVIDER_UNAVAILABLE"
+    assert response.status_code == 200
+    body = response.json()
+    assert body["symbol"] == SYMBOL
+    assert body["name"] == "贵州茅台"
+    assert body["quote"] is None
+    assert body["relative_strength"] is None
+    assert body["market"]["phase"] == "morning"
 
 
 async def test_snapshot_unknown_symbol_returns_404(
@@ -120,6 +130,63 @@ async def test_snapshot_marks_removed_member(client: AsyncClient, session: Async
     body = (await client.get(f"/api/v1/stocks/{SYMBOL}/snapshot")).json()
 
     assert body["is_current_universe_member"] is False
+
+
+# ── 历史行情 ────────────────────────────────────────────────────────────────
+async def test_bars_are_independent_from_realtime_quote_and_returned_in_time_order(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    await setup_member(session)
+    for index, close in enumerate(("1200.00", "1210.00", "1220.00"), start=1):
+        moment = AT_0950 - timedelta(days=4 - index)
+        session.add(
+            Bar(
+                symbol=SYMBOL,
+                timeframe="1d",
+                bar_time=moment,
+                open=Decimal(close) - Decimal("2"),
+                high=Decimal(close) + Decimal("5"),
+                low=Decimal(close) - Decimal("6"),
+                close=Decimal(close),
+                volume=Decimal("1000000") * index,
+                amount=None,
+                adjustment="qfq",
+                source="eastmoney_via_akshare",
+                source_url="https://quote.eastmoney.com/",
+                observed_at=AT_0950,
+            )
+        )
+    await session.flush()
+
+    response = await client.get(f"/api/v1/stocks/{SYMBOL}/bars?timeframe=1d&limit=2")
+
+    assert response.status_code == 200
+    rows = response.json()["data"]
+    assert [row["close"] for row in rows] == [1210.0, 1220.0]
+    assert rows[0]["bar_time"] < rows[1]["bar_time"]
+    assert all(row["timeframe"] == "1d" for row in rows)
+    assert all(row["adjustment"] == "qfq" for row in rows)
+    assert rows[0]["change_percent"] is None
+    assert rows[1]["change_amount"] == 10.0
+    meta = response.json()["meta"]
+    assert meta["timeframe"] == "1d"
+    assert meta["total_count"] == 2
+    assert meta["summaries"]["all"]["start_close"] == 1210.0
+    assert meta["summaries"]["all"]["end_close"] == 1220.0
+    assert meta["summaries"]["all"]["highest_close"] == 1220.0
+    assert meta["summaries"]["all"]["lowest_close"] == 1210.0
+    assert meta["summaries"]["1m"]["count"] == 2
+
+
+async def test_bars_unknown_symbol_returns_404(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    await seed_universe(session, AT_0950)
+
+    response = await client.get("/api/v1/stocks/999999/bars")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "INSTRUMENT_NOT_FOUND"
 
 
 # ── 股票池 ───────────────────────────────────────────────────────────────────
@@ -322,3 +389,63 @@ async def test_refresh_analyses_returns_202_job(
     job = response.json()["data"]
     assert job["job_type"] == "analysis_refresh"
     assert job["status"] == "queued"
+
+
+async def test_refresh_quote_returns_single_symbol_job_with_estimate(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    await setup_member(session)
+
+    response = await client.post(f"/api/v1/stocks/{SYMBOL}/quote-refresh")
+
+    assert response.status_code == 202
+    data = response.json()["data"]
+    assert data["job"]["job_type"] == "quote_refresh"
+    assert data["job"]["symbol"] == SYMBOL
+    assert data["job"]["status"] == "queued"
+    assert data["source"] == "eastmoney_via_akshare"
+    assert data["estimated_seconds"] == 10
+    assert data["retry_after_seconds"] == 0
+
+
+async def test_refresh_quote_merges_repeated_active_request(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    await setup_member(session)
+
+    first = (await client.post(f"/api/v1/stocks/{SYMBOL}/quote-refresh")).json()["data"]
+    second = (await client.post(f"/api/v1/stocks/{SYMBOL}/quote-refresh")).json()["data"]
+
+    assert second["job"]["id"] == first["job"]["id"]
+    assert second["job"]["status"] == "queued"
+
+
+async def test_refresh_quote_enforces_terminal_job_cooldown(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    await setup_member(session)
+    first = (await client.post(f"/api/v1/stocks/{SYMBOL}/quote-refresh")).json()["data"]
+    job = await session.get(Job, UUID(first["job"]["id"]))
+    assert job is not None
+    job.status = "failed"
+    job.error_code = "PROVIDER_UNAVAILABLE"
+    job.error_message = "上游暂时不可用"
+    job.updated_at = AT_0950
+    await session.flush()
+
+    second = (await client.post(f"/api/v1/stocks/{SYMBOL}/quote-refresh")).json()["data"]
+
+    assert second["job"]["id"] == first["job"]["id"]
+    assert second["job"]["status"] == "failed"
+    assert second["retry_after_seconds"] == 30
+
+
+async def test_refresh_quote_unknown_symbol_returns_404(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    await seed_universe(session, AT_0950)
+
+    response = await client.post("/api/v1/stocks/999999/quote-refresh")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "INSTRUMENT_NOT_FOUND"

@@ -17,20 +17,26 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from apps.api.app.core.enums import PredictionHorizon
 
-DataSourceStatus = Literal["ok", "degraded", "failed"]
+DataSourceStatus = Literal["ok", "pending", "degraded", "failed"]
 ConnectionStatus = Literal["active", "degraded", "unavailable"]
 
 
 class DataSourceDTO(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    key: str = Field(description="数据源标识，如 csindex / eastmoney_via_akshare / cninfo")
+    key: str = Field(description="Worker Provider 标识：csi300 / akshare / cn_disclosure")
     name: str = Field(description="展示名")
     status: DataSourceStatus
+    active_source: str = Field(description="该数据源唯一、明确的实际来源标识")
     last_success_at: datetime | None = Field(
         default=None, description="最后一次成功采集时间；从未成功为 null（spec §8）"
     )
     consecutive_failures: int = 0
+    next_run_at: datetime | None = None
+    coverage: int = 0
+    total: int = 0
+    job_count: int = 0
+    failing_jobs: list[str] = Field(default_factory=list)
     last_error_code: str | None = None
     last_error_message: str | None = Field(
         default=None, description="已脱敏：worker 侧落盘前抹掉密钥（spec §14.3）"

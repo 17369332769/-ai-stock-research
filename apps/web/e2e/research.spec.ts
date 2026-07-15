@@ -10,7 +10,7 @@ import { installApi } from './mock-api';
  */
 
 test.describe('E2E-3 研究页', () => {
-  test('信息顺序固定：行情 → 异动 → 预测 → 公告新闻 → 历史相似行情 → 模型成绩（spec §3.2）', async ({
+  test('信息顺序固定：行情 → 历史行情 → 异动 → 预测 → 公告新闻 → 历史相似行情 → 模型成绩', async ({
     page,
   }) => {
     await installApi(page);
@@ -25,19 +25,29 @@ test.describe('E2E-3 研究页', () => {
     await expect(page.getByTestId('quote-source')).toContainText('eastmoney_via_akshare');
     await expect(page.getByTestId('quote-freshness')).toContainText('新鲜');
 
+    // 历史行情是独立数据区，不借用顶部实时行情字段。
+    await expect(page.getByTestId('historical-line-chart')).toBeVisible();
+    await expect(page.getByTestId('historical-latest-close')).toContainText('1,215.04');
+    await expect(page.getByTestId('historical-source')).toContainText('akshare');
+    await page.getByTestId('history-period-5m').click();
+    await expect(page.getByTestId('historical-line-chart')).toHaveAttribute(
+      'aria-label',
+      /5 分钟线.*2 条/,
+    );
+
     // 区块顺序
     const sections = page.locator('[data-order]');
-    await expect(sections).toHaveCount(5);
+    await expect(sections).toHaveCount(6);
     const ids = await sections.evaluateAll((nodes) =>
       nodes.map((node) => node.getAttribute('data-section')),
     );
-    expect(ids).toEqual(['anomaly', 'prediction', 'documents', 'analogs', 'scorecard']);
+    expect(ids).toEqual(['history', 'anomaly', 'prediction', 'documents', 'analogs', 'scorecard']);
 
     // DOM 顺序即视觉顺序
     const orders = await sections.evaluateAll((nodes) =>
       nodes.map((node) => Number(node.getAttribute('data-order'))),
     );
-    expect(orders).toEqual([1, 2, 3, 4, 5]);
+    expect(orders).toEqual([1, 2, 3, 4, 5, 6]);
   });
 
   test('每条 AI 结论都有可点击证据（spec §3.2 红线）', async ({ page }) => {
@@ -119,7 +129,7 @@ test.describe('E2E-8 行情过期（>180 秒）', () => {
 });
 
 test.describe('E2E-9 休市', () => {
-  test('显示「休市」与最新交易日，最新收盘价不标成实时', async ({ page }) => {
+  test('显示「休市」与最新交易日，最近行情不标成实时', async ({ page }) => {
     await installApi(page, {
       snapshot: () => ({ status: 200, body: { ...SNAPSHOT, market: CLOSED_MARKET } }),
     });
@@ -129,7 +139,7 @@ test.describe('E2E-9 休市', () => {
     await expect(page.getByTestId('badge-market_closed')).toContainText('休市');
     await expect(page.getByTestId('state-market_closed')).toBeVisible();
     await expect(page.getByTestId('latest-trading-day')).toContainText('2026');
-    await expect(page.getByTestId('price-label')).toContainText('最新收盘价');
+    await expect(page.getByTestId('price-label')).toContainText('最近行情');
     await expect(page.getByTestId('badge-realtime')).toHaveCount(0);
 
     const text = await page.getByTestId('quote-header').innerText();

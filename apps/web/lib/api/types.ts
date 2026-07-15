@@ -3,7 +3,7 @@
  *
  * 纪律（spec §5.1）：apps/web 只展示，不自行计算收益、概率或数据新鲜度。
  * 因此凡是"判断"性质的字段（freshness / better_than_baseline / confidence /
- * market.phase / in_current_universe）一律由 API 给出，本文件只描述形状。
+ * market.phase / is_current_universe_member）一律由 API 给出，本文件只描述形状。
  */
 
 // ---------------------------------------------------------------------------
@@ -91,6 +91,10 @@ export interface QuoteDTO {
   price: number;
   change_percent: number;
   observed_at: string;
+  /** 上游明确给出的行情时间；当前来源未提供时为 null。 */
+  market_time?: string | null;
+  /** 本系统实际取得行情的时间。 */
+  fetched_at?: string;
   source: string;
   source_url?: string | null;
   freshness: Freshness;
@@ -111,6 +115,50 @@ export interface RelativeStrengthDTO {
   benchmark_change_percent: number;
 }
 
+export type BarTimeframe = '1d' | '5m';
+
+/** 历史 K 线；与 QuoteDTO 的实时行情语义相互独立。 */
+export interface BarDTO {
+  symbol: string;
+  timeframe: BarTimeframe;
+  bar_time: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  amount: number | null;
+  adjustment: string;
+  source: string;
+  source_url: string | null;
+  observed_at: string;
+  change_amount?: number | null;
+  change_percent?: number | null;
+}
+
+export type BarRangeKey = '1m' | '3m' | '6m' | '1y' | '3y' | 'all';
+
+export interface BarRangeSummaryDTO {
+  range_key: string;
+  count: number;
+  start_at: string;
+  end_at: string;
+  start_close: number;
+  end_close: number;
+  change_percent: number | null;
+  highest_close: number;
+  highest_close_at: string;
+  lowest_close: number;
+  lowest_close_at: string;
+}
+
+export interface BarsMetaDTO {
+  timeframe: BarTimeframe;
+  total_count: number;
+  updated_at: string | null;
+  summaries: Partial<Record<BarRangeKey, BarRangeSummaryDTO>>;
+}
+
 // ---------------------------------------------------------------------------
 // 证券 / 自选股（spec §7.1）
 // ---------------------------------------------------------------------------
@@ -129,7 +177,7 @@ export interface WatchlistItemDTO {
   name?: string;
   universe_code?: string;
   /** false = 已调出沪深300：保留页面与既有预测，停止新预测（spec §3.1）。 */
-  in_current_universe?: boolean;
+  is_current_universe_member: boolean;
   universe_exit_at?: string | null;
   quote?: QuoteDTO | null;
   market?: MarketDTO | null;
@@ -161,6 +209,18 @@ export interface JobDTO {
   warnings?: string[];
   job_type?: string;
   symbol?: string | null;
+  created_at?: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+  updated_at?: string;
+}
+
+export interface QuoteRefreshDTO {
+  job: JobDTO;
+  source: string;
+  estimated_seconds: number;
+  retry_after_seconds: number;
+  requested_at: string;
 }
 
 /** POST /watchlist 首次添加返回 202 的 data 形状（spec §7.1）。 */
@@ -181,7 +241,7 @@ export interface SnapshotDTO {
   latest_anomaly_analysis_id: string | null;
   latest_predictions: string[];
   market?: MarketDTO | null;
-  in_current_universe?: boolean;
+  is_current_universe_member: boolean;
   universe_exit_at?: string | null;
   backfill_job?: JobDTO | null;
   missing?: string[];
@@ -334,14 +394,20 @@ export interface AnalogDTO {
 // NEXT_PUBLIC_SYSTEM_STATUS_PATH 覆盖，待与后端最终对齐。
 // ---------------------------------------------------------------------------
 
-export type DataSourceStatus = 'ok' | 'degraded' | 'failed';
+export type DataSourceStatus = 'ok' | 'pending' | 'degraded' | 'failed';
 
 export interface DataSourceDTO {
   key: string;
   name: string;
   status: DataSourceStatus;
+  active_source: string;
   last_success_at: string | null;
   consecutive_failures: number;
+  next_run_at: string | null;
+  coverage: number;
+  total: number;
+  job_count: number;
+  failing_jobs: string[];
   last_error_code?: string | null;
   last_error_message?: string | null;
 }

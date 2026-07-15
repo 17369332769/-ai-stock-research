@@ -2,15 +2,27 @@
  * spec §7 端点。所有请求集中在此，页面不直接拼 URL。
  */
 
-import { apiDelete, apiGet, apiGetItem, apiGetList, apiPatch, apiPost } from './client';
+import {
+  apiDelete,
+  apiGet,
+  apiGetItem,
+  apiGetList,
+  apiGetListWithMeta,
+  apiPatch,
+  apiPost,
+} from './client';
 import type {
   AnalogDTO,
   AnalysisDTO,
   AnalysisType,
+  BarDTO,
+  BarsMetaDTO,
+  BarTimeframe,
   DocumentDTO,
   DocumentType,
   InstrumentDTO,
   JobDTO,
+  QuoteRefreshDTO,
   PredictionDTO,
   PredictionHorizon,
   ScorecardDTO,
@@ -23,8 +35,32 @@ import type {
 
 // --- 自选股（spec §7.1）--------------------------------------------------
 
-export function getWatchlist() {
-  return apiGetList<WatchlistItemDTO>('/watchlist');
+export interface WatchlistQuery {
+  cursor?: string;
+  limit?: number;
+  q?: string;
+}
+
+export function getWatchlist(query: WatchlistQuery = {}) {
+  return apiGetList<WatchlistItemDTO>('/watchlist', {
+    cursor: query.cursor,
+    limit: query.limit,
+    q: query.q,
+  });
+}
+
+/** 成绩单选择器需要完整代码集合，因此显式遍历服务端游标。 */
+export async function getAllWatchlistItems() {
+  const items: WatchlistItemDTO[] = [];
+  let cursor: string | undefined;
+
+  do {
+    const response = await getWatchlist({ cursor, limit: 100 });
+    items.push(...response.items);
+    cursor = response.page.has_more ? response.page.next_cursor ?? undefined : undefined;
+  } while (cursor);
+
+  return items;
 }
 
 /** 首次添加返回 202 + 回补作业；调用方需读 status 判断是否进入"首次回补"状态。 */
@@ -66,6 +102,20 @@ export function getJob(jobId: string) {
 /** 保留 HTTP 状态：202 = 首次回补进行中。 */
 export function getSnapshot(symbol: string) {
   return apiGetItem<SnapshotDTO>(`/stocks/${encodeURIComponent(symbol)}/snapshot`);
+}
+
+export function getBars(symbol: string, timeframe: BarTimeframe = '1d', limit = 240) {
+  return apiGetListWithMeta<BarDTO, BarsMetaDTO>(
+    `/stocks/${encodeURIComponent(symbol)}/bars`,
+    {
+      timeframe,
+      limit,
+    },
+  );
+}
+
+export function refreshQuote(symbol: string) {
+  return apiPost<QuoteRefreshDTO>(`/stocks/${encodeURIComponent(symbol)}/quote-refresh`);
 }
 
 // --- 文档与解释（spec §7.3）----------------------------------------------

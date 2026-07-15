@@ -45,9 +45,9 @@ class AKShareEquityHistoricalData(EquityHistoricalData):
     amount_unit: str | None = Field(default=None, description="成交额单位：CNY")
 
 
-def _as_date(value: date | datetime | None, fallback: date) -> date:
+def _as_date(value: date | datetime | None, default_value: date) -> date:
     if value is None:
-        return fallback
+        return default_value
     if isinstance(value, datetime):
         return value.astimezone(SHANGHAI).date() if value.tzinfo else value.date()
     return value

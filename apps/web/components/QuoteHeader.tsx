@@ -1,8 +1,11 @@
+import type { ReactNode } from 'react';
+
 import { MARKET_PHASE_LABELS, STALE_THRESHOLD_SECONDS } from '@/lib/constants';
 import { changeTone, formatAgeSeconds, formatDate, formatDateTime, formatPrice, formatRatioAsPercent } from '@/lib/format';
 import { resolveQuoteStatus } from '@/lib/ui-state';
 import type { MarketDTO, QuoteDTO, RelativeStrengthDTO } from '@/lib/api/types';
 import { StateBadge } from './StateNotice';
+import { SourceDisplay } from './SourceDisplay';
 
 export interface QuoteHeaderProps {
   symbol: string;
@@ -12,6 +15,7 @@ export interface QuoteHeaderProps {
   relativeStrength?: RelativeStrengthDTO | null;
   /** 已调出沪深300（spec §3.1）。 */
   exited?: boolean;
+  missingAction?: ReactNode;
 }
 
 /**
@@ -19,7 +23,7 @@ export interface QuoteHeaderProps {
  *
  * 红线：
  *  - freshness=stale 时不得标"实时"，并展示 age_seconds（由 API 给出）。
- *  - 休市时展示"休市"和最新交易日，价格标注为"最新收盘价"。
+ *  - 实时行情缺失时只显示明确的空状态，不使用历史价格替代。
  */
 export function QuoteHeader({
   symbol,
@@ -28,6 +32,7 @@ export function QuoteHeader({
   market,
   relativeStrength,
   exited,
+  missingAction,
 }: QuoteHeaderProps) {
   const status = resolveQuoteStatus(quote, market);
   const tone = changeTone(quote?.change_percent);
@@ -83,26 +88,38 @@ export function QuoteHeader({
           <dl className="quote-header__meta">
             <div>
               <dt>行情时间</dt>
-              <dd data-testid="quote-observed-at">{formatDateTime(quote.observed_at)}</dd>
+              <dd data-testid="quote-market-time">
+                {quote.market_time ? formatDateTime(quote.market_time) : '上游未提供'}
+              </dd>
+            </div>
+            <div>
+              <dt>获取时间</dt>
+              <dd data-testid="quote-observed-at">
+                {formatDateTime(quote.fetched_at ?? quote.observed_at)}
+              </dd>
             </div>
             <div>
               <dt>数据源</dt>
               <dd data-testid="quote-source">
-                {quote.source_url ? (
-                  <a href={quote.source_url} target="_blank" rel="noreferrer">
-                    {quote.source}
-                  </a>
-                ) : (
-                  quote.source
-                )}
+                <SourceDisplay
+                  source={quote.source}
+                  sourceUrl={quote.source_url}
+                  dataType={
+                    status.isRealtime
+                      ? '实时行情'
+                      : status.closed
+                        ? '最近可用行情'
+                        : '历史报价'
+                  }
+                />
               </dd>
             </div>
             <div>
-              <dt>新鲜度</dt>
+              <dt>数据年龄</dt>
               <dd data-testid="quote-freshness">
                 {status.stale
                   ? `已过期（距上次更新 ${formatAgeSeconds(status.ageSeconds)}，阈值 ${STALE_THRESHOLD_SECONDS} 秒）`
-                  : '新鲜'}
+                  : '3 分钟内（新鲜）'}
               </dd>
             </div>
             {status.closed && market ? (
@@ -123,9 +140,12 @@ export function QuoteHeader({
           </dl>
         </div>
       ) : (
-        <p className="empty-hint" data-testid="quote-missing">
-          暂无行情数据。
-        </p>
+        <div className="quote-header__empty" data-testid="quote-missing">
+          <p className="empty-hint">
+            {status.availabilityLabel}。当前还没有取得这只股票的最新报价，历史行情仍可正常查看。
+          </p>
+          {missingAction}
+        </div>
       )}
     </header>
   );

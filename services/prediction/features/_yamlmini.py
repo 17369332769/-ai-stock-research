@@ -201,7 +201,7 @@ def _parse_value(raw: list[str], index: int, indent: int, rest: str, lineno: int
         return _parse_sequence(raw, nxt, indent)
     if next_indent == indent:
         return None, index  # 空值
-    raise YamlSubsetError("缩进回退到未知层级", nxt + 1)
+    raise YamlSubsetError("缩进返回到未知层级", nxt + 1)
 
 
 def _parse_sequence(raw: list[str], index: int, indent: int) -> tuple[list[Any], int]:

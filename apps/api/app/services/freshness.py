@@ -62,6 +62,8 @@ def to_quote_dto(row: Quote, now: datetime) -> QuoteDTO:
         amount=to_float(row.amount),
         volume_ratio=to_float(row.volume_ratio),
         observed_at=observed_at,
+        market_time=None,
+        fetched_at=observed_at,
         source=row.source,
         source_url=row.source_url,
         freshness=freshness,

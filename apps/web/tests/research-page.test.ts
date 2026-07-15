@@ -4,6 +4,8 @@ import { loadResearchPage } from '@/lib/research-page';
 import {
   ANALOGS,
   ANOMALY_ANALYSIS,
+  DAILY_BARS,
+  MINUTE_BARS,
   DOCUMENTS,
   DOCUMENT_ANALYSIS,
   PREDICTION_5D,
@@ -35,6 +37,7 @@ function list(items: unknown[]): Response {
 function installRoutes(overrides: Partial<Record<string, Route>> = {}) {
   const routes: Record<string, Route> = {
     snapshot: () => json(SNAPSHOT),
+    bars: (url) => list(url.searchParams.get('timeframe') === '5m' ? MINUTE_BARS : DAILY_BARS),
     analysesAnomaly: () => list([ANOMALY_ANALYSIS]),
     analysesDocument: () => list([DOCUMENT_ANALYSIS]),
     documents: () => list(DOCUMENTS),
@@ -55,6 +58,7 @@ function installRoutes(overrides: Partial<Record<string, Route>> = {}) {
       const type = url.searchParams.get('type');
 
       if (path.endsWith('/snapshot')) return routes.snapshot!(url);
+      if (path.endsWith('/bars')) return routes.bars!(url);
       if (path.endsWith('/analyses')) {
         return type === 'anomaly' ? routes.analysesAnomaly!(url) : routes.analysesDocument!(url);
       }
@@ -82,6 +86,10 @@ describe('研究页装配（spec §3.2）', () => {
 
     expect(data.snapshot?.name).toBe('贵州茅台');
     expect(data.snapshotState).toBeNull();
+    expect(data.dailyBars).toEqual(DAILY_BARS);
+    expect(data.dailyBarsMessage).toBeNull();
+    expect(data.minuteBars).toEqual(MINUTE_BARS);
+    expect(data.minuteBarsMessage).toBeNull();
     expect(data.anomalies).toHaveLength(1);
     expect(data.documents).toHaveLength(2);
     expect(data.analogs).toHaveLength(2);
@@ -153,5 +161,21 @@ describe('研究页装配（spec §3.2）', () => {
     installRoutes({ documents: () => list([]) });
     const data = await loadResearchPage('600519');
     expect(data.documents).toHaveLength(0);
+  });
+
+  it('历史行情不可用时只影响历史行情区', async () => {
+    installRoutes({
+      bars: (url) =>
+        url.searchParams.get('timeframe') === '1d'
+          ? errorBody('PROVIDER_UNAVAILABLE', '历史行情暂不可用', 503)
+          : list(MINUTE_BARS),
+    });
+    const data = await loadResearchPage('600519');
+
+    expect(data.dailyBars).toHaveLength(0);
+    expect(data.dailyBarsMessage).toContain('历史行情暂不可用');
+    expect(data.minuteBars).toEqual(MINUTE_BARS);
+    expect(data.snapshot).not.toBeNull();
+    expect(data.documents).toHaveLength(2);
   });
 });

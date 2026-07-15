@@ -19,15 +19,10 @@ SOURCE_NAME = "csindex"  # universes.source / universe_memberships.source（varc
 CSINDEX_SITE = "https://www.csindex.com.cn"
 CSINDEX_INDEX_PAGE = f"{CSINDEX_SITE}/#/indices/family/detail?indexCode={INDEX_CODE}"
 
-# 官方成分文件（当期）。两个地址是**同一发行方的主站与 OSS 镜像**，不是"另一个数据源"，
-# 因此在它们之间重试不违反 spec §5.2「不做静默备用源」；口径完全一致。
+# 官方成分文件（当期）。只保留一个明确入口。
 _CONS_PATH = f"static/html/csindex/public/uploads/file/autofile/cons/{INDEX_CODE}cons.xls"
 _CSINDEX_OSS = "https://oss-ch.csindex.com.cn"
-_CSINDEX_OSS_MIRROR = "https://csi-web-dev.oss-cn-shanghai-finance-1-pub.aliyuncs.com"
-CSINDEX_CONS_URLS: tuple[str, ...] = (
-    f"{_CSINDEX_OSS}/{_CONS_PATH}",
-    f"{_CSINDEX_OSS_MIRROR}/{_CONS_PATH}",
-)
+CSINDEX_CONS_URL = f"{_CSINDEX_OSS}/{_CONS_PATH}"
 
 # 指数调整公告（人工核对入口；PDF，MVP 不自动解析）
 CSINDEX_ANNOUNCEMENT_PAGE = f"{CSINDEX_SITE}/#/about-us/notice"

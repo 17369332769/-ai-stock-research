@@ -261,6 +261,259 @@
         "title": "AnalysisType",
         "type": "string"
       },
+      "BarDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "adjustment": {
+            "title": "Adjustment",
+            "type": "string"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "bar_time": {
+            "format": "date-time",
+            "title": "Bar Time",
+            "type": "string"
+          },
+          "change_amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Amount"
+          },
+          "change_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Percent"
+          },
+          "close": {
+            "title": "Close",
+            "type": "number"
+          },
+          "high": {
+            "title": "High",
+            "type": "number"
+          },
+          "low": {
+            "title": "Low",
+            "type": "number"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "title": "Observed At",
+            "type": "string"
+          },
+          "open": {
+            "title": "Open",
+            "type": "number"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "timeframe": {
+            "$ref": "#/components/schemas/Timeframe"
+          },
+          "volume": {
+            "title": "Volume",
+            "type": "number"
+          }
+        },
+        "required": [
+          "symbol",
+          "timeframe",
+          "bar_time",
+          "open",
+          "high",
+          "low",
+          "close",
+          "volume",
+          "adjustment",
+          "source",
+          "observed_at"
+        ],
+        "title": "BarDTO",
+        "type": "object"
+      },
+      "BarRangeSummaryDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "change_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Percent"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "end_at": {
+            "format": "date-time",
+            "title": "End At",
+            "type": "string"
+          },
+          "end_close": {
+            "title": "End Close",
+            "type": "number"
+          },
+          "highest_close": {
+            "title": "Highest Close",
+            "type": "number"
+          },
+          "highest_close_at": {
+            "format": "date-time",
+            "title": "Highest Close At",
+            "type": "string"
+          },
+          "lowest_close": {
+            "title": "Lowest Close",
+            "type": "number"
+          },
+          "lowest_close_at": {
+            "format": "date-time",
+            "title": "Lowest Close At",
+            "type": "string"
+          },
+          "range_key": {
+            "title": "Range Key",
+            "type": "string"
+          },
+          "start_at": {
+            "format": "date-time",
+            "title": "Start At",
+            "type": "string"
+          },
+          "start_close": {
+            "title": "Start Close",
+            "type": "number"
+          }
+        },
+        "required": [
+          "range_key",
+          "count",
+          "start_at",
+          "end_at",
+          "start_close",
+          "end_close",
+          "change_percent",
+          "highest_close",
+          "highest_close_at",
+          "lowest_close",
+          "lowest_close_at"
+        ],
+        "title": "BarRangeSummaryDTO",
+        "type": "object"
+      },
+      "BarsMetaDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "summaries": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BarRangeSummaryDTO"
+            },
+            "title": "Summaries",
+            "type": "object"
+          },
+          "timeframe": {
+            "$ref": "#/components/schemas/Timeframe"
+          },
+          "total_count": {
+            "title": "Total Count",
+            "type": "integer"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "timeframe",
+          "total_count",
+          "updated_at",
+          "summaries"
+        ],
+        "title": "BarsMetaDTO",
+        "type": "object"
+      },
+      "BarsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/BarDTO"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/BarsMetaDTO"
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageInfo"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "page",
+          "meta",
+          "request_id"
+        ],
+        "title": "BarsResponse",
+        "type": "object"
+      },
       "ConfidenceLabel": {
         "enum": [
           "low",
@@ -273,13 +526,35 @@
       "DataSourceDTO": {
         "additionalProperties": false,
         "properties": {
+          "active_source": {
+            "description": "该数据源唯一、明确的实际来源标识",
+            "title": "Active Source",
+            "type": "string"
+          },
           "consecutive_failures": {
             "default": 0,
             "title": "Consecutive Failures",
             "type": "integer"
           },
+          "coverage": {
+            "default": 0,
+            "title": "Coverage",
+            "type": "integer"
+          },
+          "failing_jobs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Failing Jobs",
+            "type": "array"
+          },
+          "job_count": {
+            "default": 0,
+            "title": "Job Count",
+            "type": "integer"
+          },
           "key": {
-            "description": "数据源标识，如 csindex / eastmoney_via_akshare / cninfo",
+            "description": "Worker Provider 标识：csi300 / akshare / cn_disclosure",
             "title": "Key",
             "type": "string"
           },
@@ -324,20 +599,39 @@
             "title": "Name",
             "type": "string"
           },
+          "next_run_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Run At"
+          },
           "status": {
             "enum": [
               "ok",
+              "pending",
               "degraded",
               "failed"
             ],
             "title": "Status",
             "type": "string"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
           }
         },
         "required": [
           "key",
           "name",
-          "status"
+          "status",
+          "active_source"
         ],
         "title": "DataSourceDTO",
         "type": "object"
@@ -619,6 +913,24 @@
         "title": "ItemResponse[PendingBackfillDTO]",
         "type": "object"
       },
+      "ItemResponse_QuoteRefreshDTO_": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/QuoteRefreshDTO"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "request_id"
+        ],
+        "title": "ItemResponse[QuoteRefreshDTO]",
+        "type": "object"
+      },
       "ItemResponse_ScorecardDTO_": {
         "additionalProperties": false,
         "properties": {
@@ -806,6 +1118,7 @@
         "enum": [
           "instrument_backfill",
           "analysis_refresh",
+          "quote_refresh",
           "prediction",
           "settlement"
         ],
@@ -967,6 +1280,42 @@
         ],
         "title": "ListResponse[WatchlistItemDTO]",
         "type": "object"
+      },
+      "MarketDTO": {
+        "additionalProperties": false,
+        "description": "由 API 判定的市场时段；前端不读取本机时钟自行推断。",
+        "properties": {
+          "is_trading_day": {
+            "title": "Is Trading Day",
+            "type": "boolean"
+          },
+          "latest_trading_day": {
+            "title": "Latest Trading Day",
+            "type": "string"
+          },
+          "phase": {
+            "$ref": "#/components/schemas/MarketPhase"
+          }
+        },
+        "required": [
+          "phase",
+          "is_trading_day",
+          "latest_trading_day"
+        ],
+        "title": "MarketDTO",
+        "type": "object"
+      },
+      "MarketPhase": {
+        "enum": [
+          "closed",
+          "pre_open",
+          "call_auction",
+          "morning",
+          "lunch_break",
+          "afternoon"
+        ],
+        "title": "MarketPhase",
+        "type": "string"
       },
       "ModelConnectionDTO": {
         "additionalProperties": false,
@@ -1314,6 +1663,12 @@
             "title": "Change Percent",
             "type": "number"
           },
+          "fetched_at": {
+            "description": "本系统取得该行情的时间（Asia/Shanghai）",
+            "format": "date-time",
+            "title": "Fetched At",
+            "type": "string"
+          },
           "freshness": {
             "$ref": "#/components/schemas/Freshness"
           },
@@ -1338,6 +1693,19 @@
               }
             ],
             "title": "Low"
+          },
+          "market_time": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "上游明确提供的行情时间；当前来源未提供时为 null",
+            "title": "Market Time"
           },
           "observed_at": {
             "description": "数据源观测时间（Asia/Shanghai）",
@@ -1413,10 +1781,48 @@
           "previous_close",
           "change_percent",
           "observed_at",
+          "fetched_at",
           "source",
           "freshness"
         ],
         "title": "QuoteDTO",
+        "type": "object"
+      },
+      "QuoteRefreshDTO": {
+        "additionalProperties": false,
+        "description": "单股最新行情刷新请求。作业执行结果继续通过 ``GET /jobs/{id}`` 查询。",
+        "properties": {
+          "estimated_seconds": {
+            "minimum": 1.0,
+            "title": "Estimated Seconds",
+            "type": "integer"
+          },
+          "job": {
+            "$ref": "#/components/schemas/JobDTO"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "retry_after_seconds": {
+            "minimum": 0.0,
+            "title": "Retry After Seconds",
+            "type": "integer"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job",
+          "source",
+          "estimated_seconds",
+          "retry_after_seconds",
+          "requested_at"
+        ],
+        "title": "QuoteRefreshDTO",
         "type": "object"
       },
       "RelativeStrengthDTO": {
@@ -1611,12 +2017,23 @@
             "title": "Latest Predictions",
             "type": "array"
           },
+          "market": {
+            "$ref": "#/components/schemas/MarketDTO"
+          },
           "name": {
             "title": "Name",
             "type": "string"
           },
           "quote": {
-            "$ref": "#/components/schemas/QuoteDTO"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QuoteDTO"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "实时行情尚未取得时为 null；历史行情不填入此字段"
           },
           "relative_strength": {
             "anyOf": [
@@ -1640,7 +2057,7 @@
         "required": [
           "symbol",
           "name",
-          "quote",
+          "market",
           "is_current_universe_member",
           "request_id"
         ],
@@ -1681,6 +2098,14 @@
         ],
         "title": "SystemStatusDTO",
         "type": "object"
+      },
+      "Timeframe": {
+        "enum": [
+          "5m",
+          "1d"
+        ],
+        "title": "Timeframe",
+        "type": "string"
       },
       "ValidationError": {
         "properties": {
@@ -1765,6 +2190,10 @@
             "title": "Is Current Universe Member",
             "type": "boolean"
           },
+          "market": {
+            "$ref": "#/components/schemas/MarketDTO",
+            "description": "API 判定的当前市场时段"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -1790,7 +2219,8 @@
           "name",
           "display_order",
           "created_at",
-          "is_current_universe_member"
+          "is_current_universe_member",
+          "market"
         ],
         "title": "WatchlistItemDTO",
         "type": "object"
@@ -2294,6 +2724,85 @@
         ]
       }
     },
+    "/api/v1/stocks/{symbol}/bars": {
+      "get": {
+        "operationId": "list_bars_api_v1_stocks__symbol__bars_get",
+        "parameters": [
+          {
+            "description": "6 位 A 股代码，例如 600519",
+            "in": "path",
+            "name": "symbol",
+            "required": true,
+            "schema": {
+              "description": "6 位 A 股代码，例如 600519",
+              "examples": [
+                "600519"
+              ],
+              "pattern": "^\\d{6}$",
+              "title": "Symbol",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "timeframe",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Timeframe",
+              "default": "1d"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 240,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BarsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INVALID_ARGUMENT：代码、分页或时间参数无效"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INSTRUMENT_NOT_FOUND：证券不存在或不在 MVP 市场范围"
+          }
+        },
+        "summary": "历史 K 线（与实时行情独立）",
+        "tags": [
+          "stocks"
+        ]
+      }
+    },
     "/api/v1/stocks/{symbol}/documents": {
       "get": {
         "operationId": "list_documents_api_v1_stocks__symbol__documents_get",
@@ -2620,9 +3129,67 @@
         ]
       }
     },
+    "/api/v1/stocks/{symbol}/quote-refresh": {
+      "post": {
+        "operationId": "refresh_quote_api_v1_stocks__symbol__quote_refresh_post",
+        "parameters": [
+          {
+            "description": "6 位 A 股代码，例如 600519",
+            "in": "path",
+            "name": "symbol",
+            "required": true,
+            "schema": {
+              "description": "6 位 A 股代码，例如 600519",
+              "examples": [
+                "600519"
+              ],
+              "pattern": "^\\d{6}$",
+              "title": "Symbol",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemResponse_QuoteRefreshDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INVALID_ARGUMENT：代码、分页或时间参数无效"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INSTRUMENT_NOT_FOUND：证券不存在或不在 MVP 市场范围"
+          }
+        },
+        "summary": "为当前股票登记一次最新行情刷新任务",
+        "tags": [
+          "stocks"
+        ]
+      }
+    },
     "/api/v1/stocks/{symbol}/snapshot": {
       "get": {
-        "description": "行情过期但仍有最后值 ⇒ 200 + freshness=stale + age_seconds；\n从未取得行情 ⇒ 424 PROVIDER_UNAVAILABLE。",
+        "description": "行情过期时返回 stale；尚无实时行情时返回 200 + quote=null。",
         "operationId": "get_snapshot_api_v1_stocks__symbol__snapshot_get",
         "parameters": [
           {
@@ -2671,16 +3238,6 @@
               }
             },
             "description": "INSTRUMENT_NOT_FOUND：证券不存在或不在 MVP 市场范围"
-          },
-          "424": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "PROVIDER_UNAVAILABLE：上游数据源失败且无可用结果"
           }
         },
         "summary": "股票快照（行情、新鲜度、相对强弱、最新异动与预测）",
@@ -2813,6 +3370,55 @@
     "/api/v1/watchlist": {
       "get": {
         "operationId": "get_watchlist_api_v1_watchlist_get",
+        "parameters": [
+          {
+            "description": "无填充 Base64URL 游标",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "无填充 Base64URL 游标",
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -2823,6 +3429,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INVALID_ARGUMENT：代码、分页或时间参数无效"
           }
         },
         "summary": "自选股列表（含最新行情与新鲜度）",

@@ -18,16 +18,23 @@ from apps.api.app.api.v1.deps import (
     resolve_limit,
 )
 from apps.api.app.api.v1.errors_doc import error_responses
-from apps.api.app.core.enums import AnalysisType, DocumentType, PredictionHorizon
+from apps.api.app.core.enums import AnalysisType, DocumentType, PredictionHorizon, Timeframe
 from apps.api.app.repositories.analyses import ANALYSIS_SORT_KEY
 from apps.api.app.repositories.documents import DOCUMENT_SORT_KEY
 from apps.api.app.schemas.analogs import AnalogDTO
 from apps.api.app.schemas.analyses import AnalysisDTO
+from apps.api.app.schemas.bars import BarsResponse
 from apps.api.app.schemas.common import ItemResponse, ListResponse, PageInfo
 from apps.api.app.schemas.documents import DocumentDTO
-from apps.api.app.schemas.jobs import JobDTO
+from apps.api.app.schemas.jobs import JobDTO, QuoteRefreshDTO
 from apps.api.app.schemas.quotes import SnapshotResponse
-from apps.api.app.services import analog_service, research_service, snapshot_service
+from apps.api.app.services import (
+    analog_service,
+    history_service,
+    quote_refresh_service,
+    research_service,
+    snapshot_service,
+)
 
 router = APIRouter(prefix="/stocks/{symbol}", tags=["stocks"])
 
@@ -35,16 +42,62 @@ router = APIRouter(prefix="/stocks/{symbol}", tags=["stocks"])
 @router.get(
     "/snapshot",
     response_model=SnapshotResponse,
-    responses=error_responses(400, 404, 424),
+    responses=error_responses(400, 404),
     summary="股票快照（行情、新鲜度、相对强弱、最新异动与预测）",
 )
 async def get_snapshot(
     symbol: SymbolPath, session: SessionDep, now: NowDep, request_id: RequestIdDep
 ) -> SnapshotResponse:
-    """行情过期但仍有最后值 ⇒ 200 + freshness=stale + age_seconds；
-    从未取得行情 ⇒ 424 PROVIDER_UNAVAILABLE。"""
+    """行情过期时返回 stale；尚无实时行情时返回 200 + quote=null。"""
     snapshot = await snapshot_service.get_snapshot(session, symbol, now)
     return SnapshotResponse(**snapshot.model_dump(), request_id=request_id)
+
+
+@router.post(
+    "/quote-refresh",
+    response_model=ItemResponse[QuoteRefreshDTO],
+    status_code=status.HTTP_202_ACCEPTED,
+    responses=error_responses(400, 404),
+    summary="为当前股票登记一次最新行情刷新任务",
+)
+async def refresh_quote(
+    symbol: SymbolPath,
+    session: SessionDep,
+    now: NowDep,
+    request_id: RequestIdDep,
+) -> ItemResponse[QuoteRefreshDTO]:
+    result = await quote_refresh_service.request_quote_refresh(session, symbol, now=now)
+    await session.commit()
+    return ItemResponse[QuoteRefreshDTO](data=result, request_id=request_id)
+
+
+@router.get(
+    "/bars",
+    response_model=BarsResponse,
+    responses=error_responses(400, 404),
+    summary="历史 K 线（与实时行情独立）",
+)
+async def list_bars(
+    symbol: SymbolPath,
+    session: SessionDep,
+    now: NowDep,
+    request_id: RequestIdDep,
+    timeframe: Annotated[Timeframe, Query()] = Timeframe.DAY1,
+    limit: Annotated[int, Query(ge=1, le=1000)] = 240,
+) -> BarsResponse:
+    rows, meta = await history_service.list_bars(
+        session,
+        symbol,
+        timeframe=timeframe,
+        limit=limit,
+        now=now,
+    )
+    return BarsResponse(
+        data=rows,
+        page=PageInfo(next_cursor=None, has_more=False),
+        meta=meta,
+        request_id=request_id,
+    )
 
 
 @router.get(

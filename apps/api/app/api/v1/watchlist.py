@@ -6,10 +6,13 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Response, status
+from typing import Annotated
 
-from apps.api.app.api.v1.deps import NowDep, RequestIdDep, SessionDep, SymbolPath
+from fastapi import APIRouter, Query, Response, status
+
+from apps.api.app.api.v1.deps import CursorQuery, NowDep, RequestIdDep, SessionDep, SymbolPath, resolve_cursor
 from apps.api.app.api.v1.errors_doc import error_responses
+from apps.api.app.repositories.watchlist import WATCHLIST_SORT_KEY
 from apps.api.app.schemas.common import ItemResponse, ListResponse, PageInfo
 from apps.api.app.schemas.watchlist import (
     AddWatchlistRequest,
@@ -28,12 +31,26 @@ router = APIRouter(prefix="/watchlist", tags=["watchlist"])
     summary="自选股列表（含最新行情与新鲜度）",
 )
 async def get_watchlist(
-    session: SessionDep, now: NowDep, request_id: RequestIdDep
+    session: SessionDep,
+    now: NowDep,
+    request_id: RequestIdDep,
+    cursor: CursorQuery = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    q: Annotated[str | None, Query(max_length=80)] = None,
 ) -> ListResponse[WatchlistItemDTO]:
-    items = await watchlist_service.list_watchlist(session, now)
+    items, next_cursor, has_more = await watchlist_service.list_watchlist_page(
+        session,
+        now,
+        limit=limit,
+        cursor=resolve_cursor(cursor, expected_sort=WATCHLIST_SORT_KEY),
+        query=q,
+    )
     return ListResponse[WatchlistItemDTO](
         data=items,
-        page=PageInfo(next_cursor=None, has_more=False),
+        page=PageInfo(
+            next_cursor=next_cursor.encode() if next_cursor else None,
+            has_more=has_more,
+        ),
         request_id=request_id,
     )
 

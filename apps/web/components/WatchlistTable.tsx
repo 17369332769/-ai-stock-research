@@ -12,12 +12,20 @@ import { StateBadge } from './StateNotice';
 export interface WatchlistTableProps {
   items: WatchlistItemDTO[];
   onRemove: (symbol: string) => void;
-  onMove: (symbol: string, direction: 'up' | 'down') => void;
+  onMove?: (symbol: string, direction: 'up' | 'down') => void;
   busySymbol?: string | null;
+  pageNumber?: number;
+  hasNextPage?: boolean;
+  hasPreviousPage?: boolean;
+  onNextPage?: () => void;
+  onPreviousPage?: () => void;
+  onSearch?: (query: string) => void;
 }
 
 type SortKey = 'display_order' | 'symbol' | 'name' | 'price' | 'change_percent' | 'freshness';
 type SortDirection = 'asc' | 'desc';
+
+const PAGE_SIZE = 50;
 
 const COLUMNS: { key: SortKey; label: string; sortable: boolean }[] = [
   { key: 'display_order', label: '顺序', sortable: true },
@@ -49,10 +57,22 @@ function sortValue(item: WatchlistItemDTO, key: SortKey): string | number {
 }
 
 /** 自选股表格（spec §13.1）：排序、搜索、数据新鲜度。页面不含任何交易入口。 */
-export function WatchlistTable({ items, onRemove, onMove, busySymbol }: WatchlistTableProps) {
+export function WatchlistTable({
+  items,
+  onRemove,
+  onMove,
+  busySymbol,
+  pageNumber,
+  hasNextPage,
+  hasPreviousPage,
+  onNextPage,
+  onPreviousPage,
+  onSearch,
+}: WatchlistTableProps) {
   const [query, setQuery] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('display_order');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [page, setPage] = useState(1);
 
   const visible = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -77,18 +97,33 @@ export function WatchlistTable({ items, onRemove, onMove, busySymbol }: Watchlis
     });
   }, [items, query, sortKey, sortDirection]);
 
+  const serverPaged = typeof pageNumber === 'number';
+  const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const currentPage = serverPaged ? pageNumber : Math.min(page, totalPages);
+  const pageItems = serverPaged
+    ? visible
+    : visible.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
   function toggleSort(key: SortKey) {
     if (key === sortKey) {
       setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'));
+      setPage(1);
       return;
     }
     setSortKey(key);
     setSortDirection('asc');
+    setPage(1);
   }
 
   return (
     <div data-testid="watchlist">
-      <div className="toolbar">
+      <form
+        className="toolbar"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSearch?.(query.trim());
+        }}
+      >
         <label className="field">
           <span className="field__label">搜索自选股</span>
           <input
@@ -96,14 +131,24 @@ export function WatchlistTable({ items, onRemove, onMove, busySymbol }: Watchlis
             type="search"
             value={query}
             placeholder="按代码或名称筛选"
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setPage(1);
+            }}
             data-testid="watchlist-search"
           />
         </label>
+        {onSearch ? (
+          <button type="submit" className="btn" data-testid="watchlist-search-submit">
+            搜索
+          </button>
+        ) : null}
         <span className="toolbar__count" data-testid="watchlist-count">
-          共 {items.length} 只，显示 {visible.length} 只
+          {serverPaged
+            ? `本页 ${visible.length} 只 · 第 ${currentPage} 页`
+            : `共 ${items.length} 只，显示 ${visible.length} 只 · 第 ${currentPage}/${totalPages} 页`}
         </span>
-      </div>
+      </form>
 
       <div className="table-scroll">
         <table className="table" data-testid="watchlist-table">
@@ -139,10 +184,10 @@ export function WatchlistTable({ items, onRemove, onMove, busySymbol }: Watchlis
             </tr>
           </thead>
           <tbody>
-            {visible.map((item) => {
+            {pageItems.map((item) => {
               const status = resolveQuoteStatus(item.quote, item.market);
               const backfilling = isJobRunning(item.backfill_job);
-              const exited = item.in_current_universe === false;
+              const exited = item.is_current_universe_member === false;
               const tone = changeTone(item.quote?.change_percent);
 
               return (
@@ -171,7 +216,7 @@ export function WatchlistTable({ items, onRemove, onMove, busySymbol }: Watchlis
                     {backfilling ? (
                       <StateBadge state="initial_backfill" />
                     ) : !item.quote ? (
-                      <StateBadge state="provider_failed" title="尚未取得行情" />
+                      <StateBadge state="quote_unavailable" title={status.availabilityLabel} />
                     ) : status.closed ? (
                       <StateBadge state="market_closed" />
                     ) : status.stale ? (
@@ -187,26 +232,30 @@ export function WatchlistTable({ items, onRemove, onMove, busySymbol }: Watchlis
                   </td>
                   <td data-testid="row-observed-at">{formatDateTime(item.quote?.observed_at)}</td>
                   <td className="cell--actions">
-                    <button
-                      type="button"
-                      className="btn btn--ghost"
-                      onClick={() => onMove(item.symbol, 'up')}
-                      disabled={busySymbol === item.symbol}
-                      aria-label={`将 ${item.symbol} 上移`}
-                      data-testid="row-move-up"
-                    >
-                      上移
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn--ghost"
-                      onClick={() => onMove(item.symbol, 'down')}
-                      disabled={busySymbol === item.symbol}
-                      aria-label={`将 ${item.symbol} 下移`}
-                      data-testid="row-move-down"
-                    >
-                      下移
-                    </button>
+                    {onMove ? (
+                      <>
+                        <button
+                          type="button"
+                          className="btn btn--ghost"
+                          onClick={() => onMove(item.symbol, 'up')}
+                          disabled={busySymbol === item.symbol}
+                          aria-label={`将 ${item.symbol} 上移`}
+                          data-testid="row-move-up"
+                        >
+                          上移
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--ghost"
+                          onClick={() => onMove(item.symbol, 'down')}
+                          disabled={busySymbol === item.symbol}
+                          aria-label={`将 ${item.symbol} 下移`}
+                          data-testid="row-move-down"
+                        >
+                          下移
+                        </button>
+                      </>
+                    ) : null}
                     <button
                       type="button"
                       className="btn btn--danger"
@@ -224,6 +273,54 @@ export function WatchlistTable({ items, onRemove, onMove, busySymbol }: Watchlis
           </tbody>
         </table>
       </div>
+
+      {serverPaged && (hasPreviousPage || hasNextPage) ? (
+        <nav className="pagination" aria-label="自选股分页" data-testid="watchlist-pagination">
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={onPreviousPage}
+            disabled={!hasPreviousPage}
+            data-testid="watchlist-page-prev"
+          >
+            上一页
+          </button>
+          <span data-testid="watchlist-page-indicator">第 {currentPage} 页</span>
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={onNextPage}
+            disabled={!hasNextPage}
+            data-testid="watchlist-page-next"
+          >
+            下一页
+          </button>
+        </nav>
+      ) : !serverPaged && visible.length > PAGE_SIZE ? (
+        <nav className="pagination" aria-label="自选股分页" data-testid="watchlist-pagination">
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+            disabled={currentPage === 1}
+            data-testid="watchlist-page-prev"
+          >
+            上一页
+          </button>
+          <span data-testid="watchlist-page-indicator">
+            第 {currentPage} 页，共 {totalPages} 页
+          </span>
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+            disabled={currentPage === totalPages}
+            data-testid="watchlist-page-next"
+          >
+            下一页
+          </button>
+        </nav>
+      ) : null}
 
       {visible.length === 0 ? (
         <p className="empty-hint" data-testid="watchlist-empty">

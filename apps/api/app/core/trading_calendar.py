@@ -120,11 +120,15 @@ def load_exchange_calendar(start: date, end: date) -> StaticTradingCalendar:
     """从交易所日历（XSHG，上交所）加载真实交易日。
 
     只在生产路径调用；测试一律使用 StaticTradingCalendar 夹具（spec §16.1）。
+
+    ``exchange_calendars`` 的节假日数据有版本边界；直接传入超出边界的未来日期会让
+    整个 worker 启动失败。先加载库实际提供的区间，再裁剪到应用请求范围。
     """
     import exchange_calendars as xcals
 
-    xshg = xcals.get_calendar("XSHG", start=start.isoformat(), end=end.isoformat())
-    sessions = [ts.date() for ts in xshg.sessions]
+    xshg = xcals.get_calendar("XSHG")
+    available_sessions = [ts.date() for ts in xshg.sessions]
+    sessions = [session for session in available_sessions if start <= session <= end]
     return StaticTradingCalendar(sessions)
 
 

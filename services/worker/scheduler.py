@@ -56,6 +56,7 @@ from services.worker.jobs.market_data_jobs import (
     ingest_news,
     ingest_watchlist_quotes,
     run_instrument_backfill,
+    run_quote_refresh,
     sync_csi300_universe,
 )
 from services.worker.jobs.prediction_jobs import (
@@ -96,7 +97,9 @@ SESSION_WINDOWS: Final[tuple[Window, ...]] = ((time(9, 30), time(11, 30)), (time
 TODAY_PREDICTION_WINDOWS: Final[tuple[Window, ...]] = ((time(9, 45), time(14, 45)),)
 
 MAX_CONCURRENT_BACKFILLS: Final[int] = 2
-BACKFILL_POLL_SECONDS: Final[int] = 10
+BACKFILL_POLL_SECONDS: Final[int] = 5
+MAX_CONCURRENT_QUOTE_REFRESHES: Final[int] = 4
+QUOTE_REFRESH_POLL_SECONDS: Final[int] = 1
 HEARTBEAT_SECONDS: Final[int] = 60
 
 
@@ -233,7 +236,7 @@ def build_schedule() -> tuple[JobSpec, ...]:
             fn=ingest_watchlist_quotes,
             triggers=every(QUOTE_WINDOWS, timedelta(seconds=15)),
             retry=RetryPolicy(max_attempts=3, base_delay_seconds=1.0, factor=2.0, max_delay_seconds=8.0),
-            timeout_seconds=6.0,
+            timeout_seconds=12.0,
             misfire_grace_seconds=10,  # 迟到超过 10 秒的 tick 直接丢弃，不补跑旧行情
         ),
         # 5 分钟K线 | 09:35-11:30、13:05-15:05 每 60 秒 | 失败：按主键幂等补写（作业内 upsert）
@@ -364,12 +367,27 @@ def build_schedule() -> tuple[JobSpec, ...]:
             misfire_grace_seconds=30,
             trading_day_only=False,
         ),
+        JobSpec(
+            job_id="quote_refresh_dispatcher",
+            title="单股最新行情任务分发",
+            provider=PROVIDER_INTERNAL,
+            fn=dispatch_pending_quote_refreshes,
+            triggers=(IntervalTrigger(seconds=QUOTE_REFRESH_POLL_SECONDS, timezone=TIMEZONE),),
+            retry=RetryPolicy(max_attempts=1),
+            timeout_seconds=30.0,
+            misfire_grace_seconds=30,
+            trading_day_only=False,
+        ),
     )
 
 
 # ── 回补任务分发（jobs 表即作业锁 + 运行记录）─────────────────────────────────────────────
 _backfill_semaphore: Final[asyncio.Semaphore] = asyncio.Semaphore(MAX_CONCURRENT_BACKFILLS)
 _backfill_tasks: set[asyncio.Task[None]] = set()
+_quote_refresh_semaphore: Final[asyncio.Semaphore] = asyncio.Semaphore(
+    MAX_CONCURRENT_QUOTE_REFRESHES
+)
+_quote_refresh_tasks: set[asyncio.Task[None]] = set()
 
 _CLAIM_SQL = text(
     """
@@ -377,7 +395,7 @@ _CLAIM_SQL = text(
        SET status = 'running', started_at = :now, updated_at = :now
      WHERE id IN (
         SELECT id FROM jobs
-         WHERE job_type = 'instrument_backfill' AND status = 'queued'
+         WHERE job_type = :job_type AND status = 'queued'
          ORDER BY created_at
          FOR UPDATE SKIP LOCKED
          LIMIT :limit
@@ -390,7 +408,7 @@ _REQUEUE_ORPHANS_SQL = text(
     """
     UPDATE jobs
        SET status = 'queued', started_at = NULL, updated_at = :now
-     WHERE job_type = 'instrument_backfill' AND status = 'running'
+     WHERE job_type IN ('instrument_backfill', 'quote_refresh') AND status = 'running'
     RETURNING id
     """
 )
@@ -415,12 +433,12 @@ _FINISH_FAIL_SQL = text(
 
 
 async def requeue_orphan_backfills() -> int:
-    """worker 崩溃重启后，把卡在 running 的回补任务放回队列（作业幂等，spec §14.2）。"""
+    """worker 重启后，把中断的回补与单股行情任务重新排队。"""
     async with session_scope() as session:
         result = await session.execute(_REQUEUE_ORPHANS_SQL, {"now": get_clock().now()})
         rows = result.fetchall()
     if rows:
-        logger.warning("重启后回收 %d 个中断的回补任务，已重新排队", len(rows))
+        logger.warning("重启后回收 %d 个中断任务，已重新排队", len(rows))
     return len(rows)
 
 
@@ -431,13 +449,65 @@ async def dispatch_pending_backfills() -> None:
         return
 
     async with session_scope() as session:
-        result = await session.execute(_CLAIM_SQL, {"now": get_clock().now(), "limit": free})
+        result = await session.execute(
+            _CLAIM_SQL,
+            {
+                "now": get_clock().now(),
+                "limit": free,
+                "job_type": "instrument_backfill",
+            },
+        )
         claimed = [(row[0], row[1]) for row in result.fetchall()]
 
     for job_id, symbol in claimed:
         task = asyncio.create_task(_run_backfill(job_id, symbol), name=f"backfill:{symbol}")
         _backfill_tasks.add(task)
         task.add_done_callback(_backfill_tasks.discard)
+
+
+async def dispatch_pending_quote_refreshes() -> None:
+    """认领单股行情任务；每个任务只请求自己的 symbol。"""
+    free = MAX_CONCURRENT_QUOTE_REFRESHES - len(_quote_refresh_tasks)
+    if free <= 0:
+        return
+
+    async with session_scope() as session:
+        result = await session.execute(
+            _CLAIM_SQL,
+            {
+                "now": get_clock().now(),
+                "limit": free,
+                "job_type": "quote_refresh",
+            },
+        )
+        claimed = [(row[0], row[1]) for row in result.fetchall()]
+
+    for job_id, symbol in claimed:
+        task = asyncio.create_task(
+            _run_quote_refresh_task(job_id, symbol),
+            name=f"quote-refresh:{symbol}",
+        )
+        _quote_refresh_tasks.add(task)
+        task.add_done_callback(_quote_refresh_tasks.discard)
+
+
+async def _run_quote_refresh_task(job_id: uuid.UUID, symbol: str | None) -> None:
+    if not symbol:
+        await _finish_backfill(job_id, ok=False, message="行情刷新任务缺少 symbol")
+        return
+    async with _quote_refresh_semaphore:
+        logger.info("开始手动刷新行情 symbol=%s job_id=%s", symbol, job_id)
+        try:
+            await run_quote_refresh(job_id, symbol)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            message = redact(f"{type(exc).__name__}: {exc}")
+            logger.error("手动行情刷新失败 symbol=%s job_id=%s：%s", symbol, job_id, message)
+            await _finish_backfill(job_id, ok=False, message=message)
+            return
+        await _finish_backfill(job_id, ok=True, message=None)
+        logger.info("手动行情刷新完成 symbol=%s job_id=%s", symbol, job_id)
 
 
 async def _run_backfill(job_id: uuid.UUID, symbol: str | None) -> None:
@@ -565,6 +635,11 @@ class WorkerScheduler:
             with contextlib.suppress(TimeoutError):
                 async with asyncio.timeout(30):
                     await asyncio.gather(*list(_backfill_tasks), return_exceptions=True)
+        if _quote_refresh_tasks:
+            logger.info("等待 %d 个单股行情任务收尾…", len(_quote_refresh_tasks))
+            with contextlib.suppress(TimeoutError):
+                async with asyncio.timeout(30):
+                    await asyncio.gather(*list(_quote_refresh_tasks), return_exceptions=True)
         self.registry.persist()
         await dispose_engine()
         logger.info("调度器已停止")
@@ -582,6 +657,43 @@ def _configure_logging() -> None:
 async def main() -> None:
     _configure_logging()
     worker = WorkerScheduler()
+
+    # 全新安装时数据库没有成分股；若只等 07:30/18:30，首页可能长时间显示空列表。
+    # 启动时仅在当前成分为空的情况下做一次初始化同步，失败不阻断调度器启动。
+    try:
+        async with session_scope() as session:
+            current_members = await session.scalar(
+                text(
+                    "SELECT COUNT(*) FROM universe_memberships "
+                    "WHERE universe_code = 'CSI300' AND effective_to IS NULL"
+                )
+            )
+        if not current_members:
+            logger.info("当前沪深300成分为空，执行首次同步")
+            await sync_csi300_universe()
+    except Exception as exc:
+        logger.error("首次沪深300成分同步失败（继续启动）：%s", redact(str(exc)))
+
+    # 默认把完整沪深300作为自选股。只在自选表为空时初始化，避免覆盖用户之后的删减和排序；
+    # 直接批量插入，不为首次安装创建 300 个历史回补作业。
+    try:
+        async with session_scope() as session:
+            watchlist_count = await session.scalar(text("SELECT COUNT(*) FROM watchlist_items"))
+            if not watchlist_count:
+                result = await session.execute(
+                    text(
+                        "INSERT INTO watchlist_items (symbol, universe_code, display_order) "
+                        "SELECT symbol, universe_code, "
+                        "       (ROW_NUMBER() OVER (ORDER BY symbol) - 1)::integer "
+                        "FROM universe_memberships "
+                        "WHERE universe_code = 'CSI300' AND effective_to IS NULL "
+                        "ON CONFLICT (symbol) DO NOTHING"
+                    )
+                )
+                inserted = int(getattr(result, "rowcount", 0) or 0)
+                logger.info("默认自选股初始化完成：新增 %d 只", inserted)
+    except Exception as exc:
+        logger.error("默认自选股初始化失败（继续启动）：%s", redact(str(exc)))
 
     # 崩溃恢复：把中断的回补任务放回队列。数据库暂时不可用时不要拖垮 worker 启动。
     try:

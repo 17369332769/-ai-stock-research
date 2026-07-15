@@ -13,8 +13,7 @@ SOURCE_SZSE = "szse"  # 深圳证券交易所
 ALLOWED_SOURCES: frozenset[str] = frozenset({SOURCE_CNINFO, SOURCE_SSE, SOURCE_SZSE})
 
 # MVP 实现的唯一来源：巨潮资讯。
-# 巨潮同时覆盖沪深两市且是法定披露平台，因此**不需要**在沪/深所之间做静默切换 ——
-# spec §5.2 明令禁止静默备用源：巨潮失败即 unavailable，不改口径去打交易所站点。
+# 巨潮同时覆盖沪深两市且是法定披露平台；失败即 unavailable，不改口径请求交易所站点。
 PRIMARY_SOURCE = SOURCE_CNINFO
 
 CNINFO_BASE = "http://www.cninfo.com.cn"
@@ -25,7 +24,7 @@ CNINFO_DETAIL_URL = f"{CNINFO_BASE}/new/disclosure/detail"
 CNINFO_LIST_REFERER = f"{CNINFO_BASE}/new/commonUrl?url=disclosure/list/notice"
 
 # 上交所 / 深交所官方公告入口 —— **当前未接线**，仅登记在 docs/data-sources.md 备查。
-# 接线前不得出现在任何 fallback 路径里。
+# 接线前不得进入生产请求路径。
 SSE_ANNOUNCEMENT_URL = "http://www.sse.com.cn/disclosure/listedinfo/announcement/"
 SZSE_ANNOUNCEMENT_URL = "https://www.szse.cn/disclosure/listed/notice/index.html"
 

@@ -11,6 +11,8 @@ worker 侧消费者为 ``services/worker/jobs/market_data_jobs.py::run_instrumen
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
+from math import ceil
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,6 +30,10 @@ def backfill_key(symbol: str) -> str:
 
 def analysis_refresh_key(symbol: str) -> str:
     return f"{JobType.ANALYSIS_REFRESH.value}:{symbol}"
+
+
+def quote_refresh_key(symbol: str) -> str:
+    return f"{JobType.QUOTE_REFRESH.value}:{symbol}"
 
 
 async def get(session: AsyncSession, job_id: uuid.UUID) -> Job | None:
@@ -140,3 +146,35 @@ async def enqueue_analysis_refresh(session: AsyncSession, symbol: str) -> Job:
         first_step="analyze",
         idempotency_key=analysis_refresh_key(symbol),
     )
+
+
+async def enqueue_quote_refresh(
+    session: AsyncSession,
+    symbol: str,
+    *,
+    now: datetime,
+    cooldown_seconds: int = 30,
+) -> tuple[Job, int]:
+    """登记单股行情刷新，并返回剩余冷却秒数。
+
+    同一股票始终复用一个作业键：排队或运行中的请求直接返回原作业；终态作业在
+    30 秒冷却期内也直接返回，避免按钮连点向唯一行情来源制造重复压力。
+    """
+    key = quote_refresh_key(symbol)
+    existing = await get_by_key(session, key)
+    if existing is not None:
+        if existing.status in ACTIVE_STATUSES:
+            return existing, 0
+        age = max(0.0, (now - existing.updated_at).total_seconds())
+        if age < cooldown_seconds:
+            return existing, max(1, ceil(cooldown_seconds - age))
+
+    job = await enqueue(
+        session,
+        job_type=JobType.QUOTE_REFRESH,
+        symbol=symbol,
+        total_steps=1,
+        first_step="fetch_quote",
+        idempotency_key=key,
+    )
+    return job, 0

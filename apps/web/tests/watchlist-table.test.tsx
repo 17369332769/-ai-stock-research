@@ -67,6 +67,29 @@ describe('自选股表格：排序与搜索（spec §13.1）', () => {
     expect(screen.getByTestId('watchlist-empty')).toHaveTextContent('没有匹配的自选股');
   });
 
+  it('超过50只时只渲染当前页并支持翻页', async () => {
+    const user = userEvent.setup();
+    const manyItems = Array.from({ length: 120 }, (_, index) => ({
+      ...WATCHLIST[0]!,
+      symbol: String(index + 1).padStart(6, '0'),
+      name: `股票${index + 1}`,
+      display_order: index,
+      quote: null,
+    }));
+
+    render(<WatchlistTable items={manyItems} onRemove={vi.fn()} onMove={vi.fn()} />);
+
+    expect(rowSymbols()).toHaveLength(50);
+    expect(rowSymbols()[0]).toBe('000001');
+    expect(screen.getByTestId('watchlist-page-indicator')).toHaveTextContent('第 1 页，共 3 页');
+
+    await user.click(screen.getByTestId('watchlist-page-next'));
+
+    expect(rowSymbols()).toHaveLength(50);
+    expect(rowSymbols()[0]).toBe('000051');
+    expect(screen.getByTestId('watchlist-page-indicator')).toHaveTextContent('第 2 页，共 3 页');
+  });
+
   it('移除与排序回调把 symbol 传给页面（页面负责调 API）', async () => {
     const user = userEvent.setup();
     const onRemove = vi.fn();

@@ -66,6 +66,7 @@ export const MARKET_PHASE_LABELS = {
 
 export const DATA_SOURCE_STATUS_LABELS = {
   ok: '正常',
+  pending: '等待运行',
   degraded: '降级',
   failed: '失败',
 } as const;

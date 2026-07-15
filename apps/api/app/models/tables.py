@@ -41,7 +41,7 @@ EVENT_HORIZONS = ("intraday", "short", "medium", "unknown")
 PREDICTION_HORIZONS = ("today_close", "next_5d")
 CONFIDENCE_LABELS = ("low", "medium", "high")
 MODEL_STATUSES = ("candidate", "active", "retired")
-JOB_TYPES = ("instrument_backfill", "analysis_refresh", "prediction", "settlement")
+JOB_TYPES = ("instrument_backfill", "analysis_refresh", "quote_refresh", "prediction", "settlement")
 JOB_STATUSES = ("queued", "running", "succeeded", "failed")
 
 

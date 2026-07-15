@@ -93,6 +93,19 @@ async def test_backfill_dispatcher_runs_on_non_trading_day(
     assert calls == ["backfill_dispatcher"]
 
 
+async def test_quote_refresh_dispatcher_runs_on_non_trading_day(
+    registry: HealthRegistry, runner: JobRunner, clock: FixedClock
+) -> None:
+    calls: list[str] = []
+    spec = make_spec(calls, job_id="quote_refresh_dispatcher", trading_day_only=False)
+    worker = build([spec], registry, runner)
+
+    clock.set(datetime.combine(WEEKEND, time(10, 0), tzinfo=SHANGHAI))
+    await worker.dispatch(spec)
+
+    assert calls == ["quote_refresh_dispatcher"]
+
+
 async def test_disabled_provider_is_not_scheduled(
     registry: HealthRegistry, runner: JobRunner, clock: FixedClock
 ) -> None:

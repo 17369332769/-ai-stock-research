@@ -21,8 +21,14 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY pyproject.toml ./
 COPY apps/__init__.py apps/__init__.py
 COPY apps/api/__init__.py apps/api/__init__.py
+COPY apps/api/app/__init__.py apps/api/app/__init__.py
 COPY services/__init__.py services/__init__.py
-RUN pip install --no-cache-dir -e .
+COPY services/openbb_extensions services/openbb_extensions
+RUN pip install --no-cache-dir -e . \
+    && pip install --no-cache-dir --no-deps \
+        -e services/openbb_extensions/akshare_provider \
+        -e services/openbb_extensions/cn_disclosure_provider \
+        -e services/openbb_extensions/csi300_provider
 
 FROM python:3.12-slim AS runtime
 
@@ -31,7 +37,8 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
     TZ=Asia/Shanghai \
     PATH="/opt/venv/bin:$PATH" \
-    OPENBB_HOME=/home/app/.openbb_platform
+    OPENBB_HOME=/home/app/.openbb_platform \
+    CSI300_SNAPSHOT_DIR=/data/csi300_snapshots
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends tzdata \

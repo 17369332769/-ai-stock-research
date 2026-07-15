@@ -12,7 +12,7 @@ test.describe('E2E-6 股票被调出沪深300', () => {
         status: 200,
         body: {
           ...SNAPSHOT,
-          in_current_universe: false,
+          is_current_universe_member: false,
           universe_exit_at: '2026-06-30T00:00:00+08:00',
         },
       }),
@@ -77,7 +77,7 @@ test.describe('E2E-6 股票被调出沪深300', () => {
       watchlist: () => ({
         status: 200,
         body: {
-          data: [{ ...WATCHLIST[0], in_current_universe: false }],
+          data: [{ ...WATCHLIST[0], is_current_universe_member: false }],
           page: { next_cursor: null, has_more: false },
           request_id: 'r',
         },

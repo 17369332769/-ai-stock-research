@@ -24,14 +24,15 @@ function apiError(code: ApiError['code'], status: number) {
   return new ApiError({ code, message: 'x', status });
 }
 
-describe('九种必须状态（spec §13.2）', () => {
-  it('恰好定义九种状态且中文标签齐全', () => {
-    expect(UI_STATES).toHaveLength(9);
+describe('页面状态定义', () => {
+  it('包含独立的实时行情缺失状态且中文标签齐全', () => {
+    expect(UI_STATES).toHaveLength(10);
     expect(UI_STATES.map(stateLabel)).toEqual([
       '首次回补',
       '正常',
       '部分数据缺失',
       '行情可能已过期',
+      '暂无实时行情',
       '数据源失败',
       '模型不可用',
       '无文档',
@@ -84,12 +85,12 @@ describe('行情状态：新鲜度只读 API（spec §5.1 / §3.2 红线）', ()
     expect(status.ageSeconds).toBe(640);
   });
 
-  it('休市 → 休市状态，价格标注为最新收盘价而非实时', () => {
+  it('休市 → 休市状态，已有 Quote 只标为最近行情而非收盘价', () => {
     const status = resolveQuoteStatus(FRESH_QUOTE, CLOSED_MARKET);
     expect(status.closed).toBe(true);
     expect(status.isRealtime).toBe(false);
     expect(status.states).toContain('market_closed');
-    expect(status.priceLabel).toBe('最新收盘价');
+    expect(status.priceLabel).toBe('最近行情');
   });
 
   it('休市 + 过期同时成立时两条状态都保留，不互相吞掉', () => {
@@ -106,7 +107,7 @@ describe('行情状态：新鲜度只读 API（spec §5.1 / §3.2 红线）', ()
         latest_trading_day: '2026-07-14',
       });
       expect(status.isRealtime).toBe(false);
-      expect(status.priceLabel).toBe('最后成交价');
+      expect(status.priceLabel).toBe('最近行情');
     }
   });
 
@@ -118,10 +119,21 @@ describe('行情状态：新鲜度只读 API（spec §5.1 / §3.2 红线）', ()
     expect(isMarketClosed(null)).toBe(false);
   });
 
-  it('缺少行情时不产生任何行情状态', () => {
+  it('缺少行情时产生独立空状态，不映射成数据源失败', () => {
     const status = resolveQuoteStatus(null, TRADING_MARKET);
-    expect(status.states).toEqual([]);
+    expect(status.states).toEqual(['quote_unavailable']);
     expect(status.isRealtime).toBe(false);
+    expect(status.availabilityLabel).toBe('暂无实时行情');
+  });
+
+  it('盘前缺少行情时说明正在等待首次行情', () => {
+    const status = resolveQuoteStatus(null, {
+      phase: 'pre_open',
+      is_trading_day: true,
+      latest_trading_day: '2026-07-14',
+    });
+    expect(status.states).toEqual(['quote_unavailable']);
+    expect(status.availabilityLabel).toBe('盘前，等待首次行情');
   });
 });
 

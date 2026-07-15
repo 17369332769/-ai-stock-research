@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from apps.api.app.api.v1.deps import RequestIdDep, SessionDep
+from apps.api.app.api.v1.deps import NowDep, RequestIdDep, SessionDep
 from apps.api.app.schemas.common import ItemResponse
 from apps.api.app.schemas.system import SystemStatusDTO
 from apps.api.app.services import system_status as system_status_service
@@ -25,7 +25,7 @@ router = APIRouter(tags=["system"])
     summary="数据源、模型与 Agent 连接状态",
 )
 async def get_system_status(
-    session: SessionDep, request_id: RequestIdDep
+    session: SessionDep, now: NowDep, request_id: RequestIdDep
 ) -> ItemResponse[SystemStatusDTO]:
-    status = await system_status_service.get_system_status(session)
+    status = await system_status_service.get_system_status(session, now)
     return ItemResponse[SystemStatusDTO](data=status, request_id=request_id)

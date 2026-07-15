@@ -5,10 +5,14 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any, cast
 
-from sqlalchemy import CursorResult, delete, func, select
+from sqlalchemy import CursorResult, delete, func, literal, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from apps.api.app.models.tables import WatchlistItem
+from apps.api.app.core.errors import InvalidArgument
+from apps.api.app.core.pagination import Cursor
+from apps.api.app.models.tables import Instrument, WatchlistItem
+
+WATCHLIST_SORT_KEY = "display_order"
 
 
 async def list_items(session: AsyncSession) -> list[WatchlistItem]:
@@ -16,6 +20,53 @@ async def list_items(session: AsyncSession) -> list[WatchlistItem]:
         select(WatchlistItem).order_by(WatchlistItem.display_order.asc(), WatchlistItem.id.asc())
     )
     return list(result.scalars().all())
+
+
+def _parse_page_cursor(cursor: Cursor) -> tuple[int, int]:
+    try:
+        display_order = int(cursor.value)
+        row_id = int(cursor.id)
+    except ValueError as exc:
+        raise InvalidArgument("自选股游标字段无效") from exc
+    return display_order, row_id
+
+
+async def list_page(
+    session: AsyncSession,
+    *,
+    limit: int,
+    cursor: Cursor | None,
+    query: str | None,
+) -> tuple[list[WatchlistItem], bool]:
+    """按固定展示顺序读取一页；搜索在数据库中覆盖全部自选股。"""
+    stmt = (
+        select(WatchlistItem)
+        .join(Instrument, Instrument.symbol == WatchlistItem.symbol)
+        .order_by(WatchlistItem.display_order.asc(), WatchlistItem.id.asc())
+        .limit(limit + 1)
+    )
+    normalized = (query or "").strip()
+    if normalized:
+        stmt = stmt.where(
+            or_(
+                Instrument.symbol.contains(normalized, autoescape=True),
+                Instrument.name.contains(normalized, autoescape=True),
+            )
+        )
+    if cursor is not None:
+        display_order, row_id = _parse_page_cursor(cursor)
+        stmt = stmt.where(
+            tuple_(WatchlistItem.display_order, WatchlistItem.id)
+            > tuple_(literal(display_order), literal(row_id))
+        )
+
+    rows = list((await session.execute(stmt)).scalars().all())
+    has_more = len(rows) > limit
+    return rows[:limit], has_more
+
+
+def build_page_cursor(row: WatchlistItem) -> Cursor:
+    return Cursor(sort=WATCHLIST_SORT_KEY, value=str(row.display_order), id=str(row.id))
 
 
 async def get(session: AsyncSession, symbol: str) -> WatchlistItem | None:

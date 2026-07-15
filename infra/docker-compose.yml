@@ -55,8 +55,17 @@ services:
     build:
       context: ..
       dockerfile: infra/Dockerfile.openbb
+    environment:
+      CSI300_SNAPSHOT_DIR: /data/csi300_snapshots
+      # 容器不能使用 Windows 的 127.0.0.1 代理。需要代理时必须填写 Docker VM
+      # 可达的地址（例如启用 Clash Allow LAN 后的宿主机网关地址）。留空即直连。
+      HTTP_PROXY: "${OPENBB_HTTP_PROXY:-}"
+      HTTPS_PROXY: "${OPENBB_HTTPS_PROXY:-}"
+      NO_PROXY: "${OPENBB_NO_PROXY:-127.0.0.1,localhost,openbb,db,api,worker}"
     ports:
       - "127.0.0.1:6900:6900" # 仅供本机排障；api/worker 走容器网络 http://openbb:6900
+    volumes:
+      - ../artifacts/csi300_snapshots:/data/csi300_snapshots
     healthcheck:
       test:
         - CMD

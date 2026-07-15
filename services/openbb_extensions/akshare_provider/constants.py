@@ -55,7 +55,7 @@ class ProviderDataError(AKShareProviderError):
     """上游返回的数据形态不符合契约：缺列、类型改变、脏值。
 
     **不吞掉、不猜测、不用默认值填充** —— 直接抛出，让上层进入 stale/unavailable
-    （spec §5.2：MVP 不做静默备用源）。
+    （spec §5.2：异常数据直接拒收）。
     """
 
 

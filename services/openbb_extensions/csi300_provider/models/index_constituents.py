@@ -5,7 +5,7 @@ REST 路由：``GET /api/v1/index/constituents?provider=csi300&symbol=000300&as_
 ``as_of`` 是 provider 特有参数（标准模型没有）：
 
 - ``as_of`` 缺省或 >= 今天 → 官方当期成分（选股用）
-- ``as_of`` < 今天         → 官方历史快照（训练用）；快照缺失直接报错，不回退当前成分
+- ``as_of`` < 今天         → 官方历史快照（训练用）；快照缺失直接报错
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from ..constants import INDEX_CODE, SHANGHAI, SOURCE_NAME, UNIVERSE_CODE, Provid
 class Csi300IndexConstituentsQueryParams(IndexConstituentsQueryParams):
     as_of: date | None = Field(
         default=None,
-        description="成分生效日期。缺省=当期成分；历史日期读官方历史快照（无快照则报错，不回退当前成分）",
+        description="成分生效日期。缺省=当期成分；历史日期读官方历史快照（无快照则报错）",
     )
 
 
