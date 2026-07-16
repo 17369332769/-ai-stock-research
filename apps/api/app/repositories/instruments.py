@@ -52,6 +52,17 @@ async def is_current_member(
     return (result.scalar_one() or 0) > 0
 
 
+async def was_member(session: AsyncSession, symbol: str, universe_code: str) -> bool:
+    """是否曾经属于指定指数；用于区分“真正调出”和普通范围外股票。"""
+    result = await session.execute(
+        select(func.count()).where(
+            UniverseMembership.universe_code == universe_code,
+            UniverseMembership.symbol == symbol,
+        )
+    )
+    return (result.scalar_one() or 0) > 0
+
+
 async def current_member_symbols(
     session: AsyncSession, universe_code: str, as_of: date, symbols: Sequence[str]
 ) -> set[str]:
@@ -132,3 +143,29 @@ async def search_current_members(
     )
     result = await session.execute(stmt)
     return list(result.scalars().all())
+
+
+async def search_all(session: AsyncSession, query: str, limit: int) -> list[Instrument]:
+    """搜索本地已知 A 股；用于添加沪深300之外的额外自选。"""
+    normalized = query.strip()
+    if not normalized:
+        return []
+    rank = case(
+        (Instrument.symbol == normalized, 0),
+        (Instrument.symbol.startswith(normalized), 1),
+        (Instrument.name == normalized, 2),
+        else_=3,
+    )
+    stmt = (
+        select(Instrument)
+        .where(
+            Instrument.active.is_(True),
+            or_(
+                Instrument.symbol.contains(normalized, autoescape=True),
+                Instrument.name.contains(normalized, autoescape=True),
+            ),
+        )
+        .order_by(rank.asc(), Instrument.symbol.asc())
+        .limit(limit)
+    )
+    return list((await session.execute(stmt)).scalars().all())

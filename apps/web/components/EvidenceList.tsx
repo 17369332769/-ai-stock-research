@@ -32,6 +32,7 @@ export function EvidenceList({ evidence }: EvidenceListProps) {
             data-testid="evidence-link"
           >
             {item.title}
+            <span className="sr-only">（将在新窗口打开）</span>
           </a>
           <blockquote className="evidence__quote" data-testid="evidence-quote">
             “{item.quote}”

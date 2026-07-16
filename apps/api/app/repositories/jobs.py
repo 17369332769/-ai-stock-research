@@ -75,6 +75,21 @@ async def succeeded_backfill(session: AsyncSession, symbol: str) -> Job | None:
     return result.scalar_one_or_none()
 
 
+async def latest_actionable(session: AsyncSession, symbol: str, job_type: JobType) -> Job | None:
+    """返回可恢复的排队、运行或失败任务；历史成功任务不占据详情页。"""
+    result = await session.execute(
+        select(Job)
+        .where(
+            Job.symbol == symbol,
+            Job.job_type == job_type.value,
+            Job.status.in_((*ACTIVE_STATUSES, JobStatus.FAILED.value)),
+        )
+        .order_by(Job.updated_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
 async def enqueue(
     session: AsyncSession,
     *,

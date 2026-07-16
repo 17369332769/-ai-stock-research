@@ -107,12 +107,14 @@ test.describe('E2E-4 预测', () => {
         status: 202,
         body: {
           data: {
-            id: 'job-e2e-1',
-            status: 'running',
-            completed_steps: 1,
-            total_steps: 3,
-            current_step: 'minute_bars',
-            error_code: null,
+            backfill_job: {
+              id: 'job-e2e-1',
+              status: 'running',
+              completed_steps: 1,
+              total_steps: 3,
+              current_step: 'minute_bars',
+              error_code: null,
+            },
           },
           request_id: 'r',
         },

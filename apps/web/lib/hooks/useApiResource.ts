@@ -11,6 +11,18 @@ export interface ApiResource<T> {
   reload: () => void;
 }
 
+interface ResourceState<T> {
+  generation: number;
+  data: T | null;
+  error: unknown;
+  loading: boolean;
+  loaded: boolean;
+}
+
+function sameInputs(left: readonly unknown[], right: readonly unknown[]): boolean {
+  return left.length === right.length && left.every((value, index) => Object.is(value, right[index]));
+}
+
 /**
  * 极简数据获取 hook：请求在浏览器侧发出，便于 E2E 用路由拦截注入固定夹具，
  * 不依赖真实后端启动（spec §16.1：测试禁止访问公网）。
@@ -19,35 +31,44 @@ export function useApiResource<T>(
   fetcher: () => Promise<T>,
   deps: readonly unknown[],
 ): ApiResource<T> {
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<unknown>(null);
-  const [loading, setLoading] = useState(true);
-  const [loaded, setLoaded] = useState(false);
   const [nonce, setNonce] = useState(0);
+  const requestSequence = useRef(0);
+  const inputsRef = useRef<readonly unknown[]>([...deps, nonce]);
+  const generationRef = useRef(0);
+
+  const currentInputs = [...deps, nonce];
+  if (!sameInputs(inputsRef.current, currentInputs)) {
+    inputsRef.current = currentInputs;
+    generationRef.current += 1;
+  }
+  const currentGeneration = generationRef.current;
+  const [state, setState] = useState<ResourceState<T>>({
+    generation: currentGeneration,
+    data: null,
+    error: null,
+    loading: true,
+    loaded: false,
+  });
 
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
 
   useEffect(() => {
+    const requestId = requestSequence.current + 1;
+    requestSequence.current = requestId;
+    const generation = generationRef.current;
     let cancelled = false;
-    setLoading(true);
+    setState({ generation, data: null, error: null, loading: true, loaded: false });
 
     fetcherRef
       .current()
       .then((value) => {
-        if (cancelled) return;
-        setData(value);
-        setError(null);
+        if (cancelled || requestSequence.current !== requestId) return;
+        setState({ generation, data: value, error: null, loading: false, loaded: true });
       })
       .catch((cause: unknown) => {
-        if (cancelled) return;
-        setData(null);
-        setError(cause);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setLoading(false);
-        setLoaded(true);
+        if (cancelled || requestSequence.current !== requestId) return;
+        setState({ generation, data: null, error: cause, loading: false, loaded: true });
       });
 
     return () => {
@@ -58,5 +79,8 @@ export function useApiResource<T>(
 
   const reload = useCallback(() => setNonce((value) => value + 1), []);
 
-  return { data, error, loading, loaded, reload };
+  if (state.generation !== currentGeneration) {
+    return { data: null, error: null, loading: true, loaded: false, reload };
+  }
+  return { ...state, reload };
 }

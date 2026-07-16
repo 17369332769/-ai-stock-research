@@ -62,3 +62,19 @@ async def search_instruments(
     )
     # 命中即为当日成分（查询已按有效期过滤）
     return [InstrumentDTO.from_row(row, is_current_universe_member=True) for row in rows]
+
+
+async def search_known_instruments(
+    session: AsyncSession,
+    query: str,
+    as_of: date,
+    limit: int,
+) -> list[InstrumentDTO]:
+    rows = await instruments_repo.search_all(session, query, limit)
+    members = await instruments_repo.current_member_symbols(
+        session, "CSI300", as_of, [row.symbol for row in rows]
+    )
+    return [
+        InstrumentDTO.from_row(row, is_current_universe_member=row.symbol in members)
+        for row in rows
+    ]

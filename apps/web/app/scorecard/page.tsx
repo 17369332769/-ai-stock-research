@@ -1,19 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import { PredictionHistoryTable } from '@/components/PredictionHistoryTable';
 import { ScorecardTable } from '@/components/ScorecardTable';
 import { Section } from '@/components/Section';
 import { StateNotice } from '@/components/StateNotice';
 import { Disclaimer } from '@/components/Disclaimer';
-import { getAllWatchlistItems, getPredictionHistory, getScorecard, getSystemStatus } from '@/lib/api/endpoints';
+import { getPredictionHistory, getResearchPool, getScorecard, getSystemStatus } from '@/lib/api/endpoints';
 import type { PredictionHorizon, ScorecardDTO, ScorecardWindow } from '@/lib/api/types';
 import { errorMessage } from '@/lib/error-messages';
 import { HORIZON_LABELS } from '@/lib/constants';
 import { useApiResource } from '@/lib/hooks/useApiResource';
-import { mapErrorToState } from '@/lib/ui-state';
+import { isInsufficientData, mapErrorToState } from '@/lib/ui-state';
 
 const WINDOWS: { key: ScorecardWindow; label: string }[] = [
   { key: '20', label: '最近20次' },
@@ -24,10 +25,14 @@ const WINDOWS: { key: ScorecardWindow; label: string }[] = [
 const HORIZONS: PredictionHorizon[] = ['today_close', 'next_5d'];
 
 /** 预测成绩单（spec §13.1）：模型维度 + 股票维度。所有统计量由 API 计算。 */
-export default function ScorecardPage() {
+function ScorecardContent() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [window, setWindow] = useState<ScorecardWindow>('100');
-  const [symbol, setSymbol] = useState<string>('');
-  const [horizon, setHorizon] = useState<PredictionHorizon>('next_5d');
+  const [symbolSearch, setSymbolSearch] = useState('');
+  const symbol = searchParams.get('symbol') ?? '';
+  const horizon: PredictionHorizon = searchParams.get('horizon') === 'today_close' ? 'today_close' : 'next_5d';
 
   // 模型清单来自系统状态（模型连接状态，spec §13.1）。
   const status = useApiResource(() => getSystemStatus(), []);
@@ -36,21 +41,33 @@ export default function ScorecardPage() {
 
   const scorecards = useApiResource(async () => {
     if (modelKeys.length === 0) return [] as ScorecardDTO[];
-    const results = await Promise.all(
-      modelKeys.map(async (modelKey) => {
-        try {
-          return await getScorecard(modelKey, window);
-        } catch {
-          return null;
-        }
-      }),
-    );
-    return results.filter((card): card is ScorecardDTO => card !== null);
+    return Promise.all(modelKeys.map((modelKey) => getScorecard(modelKey, window)));
   }, [modelKeys.join(','), window]);
 
-  const watchlist = useApiResource(() => getAllWatchlistItems(), []);
-  const symbols = (watchlist.data ?? []).map((item) => item.symbol);
-  const activeSymbol = symbol || symbols[0] || '';
+  const researchPool = useApiResource(async () => (await getResearchPool('all')).items, []);
+  const poolItems = researchPool.data ?? [];
+  const normalizedSearch = symbolSearch.trim().toLowerCase();
+  const visibleSymbols = normalizedSearch
+    ? poolItems.filter(
+        (item) =>
+          item.symbol.toLowerCase().includes(normalizedSearch) ||
+          (item.name ?? '').toLowerCase().includes(normalizedSearch),
+      )
+    : poolItems;
+  const activeSymbol = symbol || poolItems[0]?.symbol || '';
+  const activeItem = poolItems.find((item) => item.symbol === activeSymbol);
+  const selectItems =
+    activeItem && !visibleSymbols.some((item) => item.symbol === activeSymbol)
+      ? [activeItem, ...visibleSymbols]
+      : visibleSymbols;
+
+  const updateSelection = (nextSymbol: string, nextHorizon: PredictionHorizon) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (nextSymbol) params.set('symbol', nextSymbol);
+    else params.delete('symbol');
+    params.set('horizon', nextHorizon);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
 
   const history = useApiResource(async () => {
     if (!activeSymbol) return [];
@@ -102,9 +119,9 @@ export default function ScorecardPage() {
               <li>
                 历史行情覆盖：{marketSource ? `${marketSource.coverage}/${marketSource.total}` : '正在检查'}
               </li>
-              <li>生成特征数据并完成训练，模型版本先进入 candidate。</li>
-              <li>确认离线成绩优于基准后，将指定版本激活为 active。</li>
-              <li>只有 active 版本会生成正式预测并进入成绩单。</li>
+              <li>生成特征数据并完成训练，模型版本先进入“候选”。</li>
+              <li>确认离线成绩优于基准后，将指定版本设为“启用”。</li>
+              <li>只有已启用版本会生成正式预测并进入成绩单。</li>
             </ol>
             <Link className="btn btn--ghost" href="/settings/data-sources">
               查看数据与模型运行状态
@@ -131,17 +148,30 @@ export default function ScorecardPage() {
         action={
           <div className="toolbar">
             <label className="field">
-              <span className="field__label">自选股</span>
+              <span className="field__label">搜索研究池股票</span>
+              <input
+                className="field__input"
+                type="search"
+                value={symbolSearch}
+                placeholder="名称或代码"
+                onChange={(event) => setSymbolSearch(event.target.value)}
+                data-testid="scorecard-symbol-search"
+              />
+            </label>
+            <label className="field">
+              <span className="field__label">研究池股票</span>
               <select
                 className="field__select"
                 value={activeSymbol}
-                onChange={(event) => setSymbol(event.target.value)}
+                onChange={(event) => {
+                  updateSelection(event.target.value, horizon);
+                }}
                 data-testid="scorecard-symbol-select"
               >
-                {symbols.length === 0 ? <option value="">暂无自选股</option> : null}
-                {symbols.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
+                {poolItems.length === 0 ? <option value="">研究池暂无股票</option> : null}
+                {selectItems.map((item) => (
+                  <option key={item.symbol} value={item.symbol}>
+                    {item.name ?? item.symbol}（{item.symbol}）
                   </option>
                 ))}
               </select>
@@ -151,7 +181,10 @@ export default function ScorecardPage() {
               <select
                 className="field__select"
                 value={horizon}
-                onChange={(event) => setHorizon(event.target.value as PredictionHorizon)}
+                onChange={(event) => {
+                  const value = event.target.value as PredictionHorizon;
+                  updateSelection(activeSymbol, value);
+                }}
                 data-testid="scorecard-horizon-select"
               >
                 {HORIZONS.map((item) => (
@@ -164,12 +197,17 @@ export default function ScorecardPage() {
           </div>
         }
       >
-        {!activeSymbol ? (
-          <p className="empty-hint">请先添加自选股。</p>
+        {researchPool.error ? (
+          <StateNotice state={mapErrorToState(researchPool.error) ?? 'provider_failed'} detail={errorMessage(researchPool.error)} action={<button type="button" className="btn" onClick={researchPool.reload}>重试研究池</button>} />
+        ) : researchPool.loading && !researchPool.loaded ? (
+          <p className="empty-hint" role="status">正在读取研究池股票…</p>
+        ) : !activeSymbol ? (
+          <p className="empty-hint">当前研究池暂无可查看的预测记录。</p>
         ) : history.error ? (
           <StateNotice
-            state={mapErrorToState(history.error) ?? 'no_prediction'}
+            state={isInsufficientData(history.error) ? 'no_prediction' : mapErrorToState(history.error) ?? 'provider_failed'}
             detail={errorMessage(history.error)}
+            action={<button type="button" className="btn" onClick={history.reload}>重试预测记录</button>}
           />
         ) : history.loading && !history.loaded ? (
           <p className="empty-hint">加载中…</p>
@@ -181,5 +219,13 @@ export default function ScorecardPage() {
         <Disclaimer />
       </Section>
     </div>
+  );
+}
+
+export default function ScorecardPage() {
+  return (
+    <Suspense fallback={<p className="empty-hint">正在加载模型表现…</p>}>
+      <ScorecardContent />
+    </Suspense>
   );
 }

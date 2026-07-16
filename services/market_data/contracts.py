@@ -62,6 +62,10 @@ class QuoteRecord(_Record):
     volume: Decimal | None = None
     amount: Decimal | None = None
     volume_ratio: Decimal | None = None
+    turnover_rate: Decimal | None = None
+    bid1: Decimal | None = None
+    ask1: Decimal | None = None
+    market_time: datetime | None = None
     source: str
     source_url: str | None = None
     observed_at: datetime

@@ -64,7 +64,7 @@ describe('自选股表格：排序与搜索（spec §13.1）', () => {
 
     await user.type(screen.getByTestId('watchlist-search'), '不存在的股票');
     expect(screen.queryAllByTestId('watchlist-row')).toHaveLength(0);
-    expect(screen.getByTestId('watchlist-empty')).toHaveTextContent('没有匹配的自选股');
+    expect(screen.getByTestId('watchlist-empty')).toHaveTextContent('当前筛选没有匹配的研究池股票');
   });
 
   it('超过50只时只渲染当前页并支持翻页', async () => {

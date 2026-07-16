@@ -86,6 +86,14 @@ migrate: ## 单独执行数据库迁移
 worker-health: ## 查看调度器健康快照（失败源 + 最后成功时间，spec §8）
 	$(COMPOSE) exec worker cat /state/worker_health.json
 
+.PHONY: audit-training-data
+audit-training-data: ## 审计日线、分钟线、复权口径与历史成分
+	$(PY) -m services.prediction.training.cli --audit-only
+
+.PHONY: train-models
+train-models: ## 泄漏测试通过后训练两个日频模型并登记 candidate
+	$(PY) -m services.prediction.training.cli
+
 # ── 发布与回滚（spec §19）────────────────────────────────────────────────────────────────
 .PHONY: release
 release: ## 发布：校验 GIT_SHA → 备份 → 迁移 → 起服务

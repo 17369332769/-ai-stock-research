@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -24,14 +25,30 @@ class WatchlistItemDTO(BaseDTO):
     symbol: str
     name: str
     display_order: int
-    created_at: datetime
+    created_at: datetime | None = None
+    pool_source: Literal["csi300", "extra"] = "extra"
+    can_remove: bool = True
+    model_scope_warning: str | None = None
+    analysis_status: Literal["waiting", "queued", "analyzing", "analyzed", "failed"] = "waiting"
+    analysis_updated_at: datetime | None = None
+    industry: str | None = None
+    has_anomaly: bool = False
+    anomaly_strength: float | None = Field(default=None, ge=0, le=1)
+    has_documents: bool = False
+    document_count: int = Field(default=0, ge=0)
+    latest_document_at: datetime | None = None
+    has_prediction: bool = False
+    prediction_count: int = Field(default=0, ge=0)
     is_current_universe_member: bool = Field(
-        description="false ⇒ 「已调出沪深300」：保留展示，停止新预测（spec §3.1）"
+        description="是否属于当前沪深300；额外关注通常为 false，不代表曾被调出"
     )
     quote: QuoteDTO | None = Field(
         default=None, description="最新行情；从未取得行情时为 null（不编造默认值）"
     )
     market: MarketDTO = Field(description="API 判定的当前市场时段")
+    backfill_job: JobDTO | None = None
+    analysis_job: JobDTO | None = None
+    missing: list[str] = Field(default_factory=list)
 
 
 class AddWatchlistRequest(BaseModel):

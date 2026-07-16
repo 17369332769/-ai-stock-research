@@ -6,6 +6,12 @@ export interface ScorecardTableProps {
   scorecard: ScorecardDTO;
 }
 
+function modelName(modelKey: string): string {
+  if (modelKey.includes('today')) return '今日收盘预测模型';
+  if (modelKey.includes('5d')) return '未来5个交易日预测模型';
+  return '研究预测模型';
+}
+
 /**
  * 模型成绩单（spec §7.4）。
  * 所有统计量（命中率、MAE、Brier、基准、better_than_baseline）均由 API 计算，前端只渲染。
@@ -17,7 +23,7 @@ export function ScorecardTable({ scorecard }: ScorecardTableProps) {
     <div className="scorecard" data-testid="scorecard" data-model-key={scorecard.model_key}>
       <div className="scorecard__head">
         <span className="scorecard__model" data-testid="scorecard-model-key">
-          {scorecard.model_key}
+          {modelName(scorecard.model_key)}
         </span>
         <span
           className={`badge ${better ? 'badge--ok' : 'badge--warning'}`}
@@ -30,6 +36,10 @@ export function ScorecardTable({ scorecard }: ScorecardTableProps) {
           统计时间 {formatDateTime(scorecard.calculated_at)}
         </span>
       </div>
+      <details className="metric-help">
+        <summary>查看模型技术信息</summary>
+        <p>模型标识：<code>{scorecard.model_key}</code></p>
+      </details>
 
       <dl className="scorecard__counts">
         <div>
@@ -46,8 +56,9 @@ export function ScorecardTable({ scorecard }: ScorecardTableProps) {
         </div>
       </dl>
 
-      <div className="table-scroll">
+      <div className="table-scroll" tabIndex={0} role="region" aria-label={`${scorecard.model_key}模型与基准指标对比`}>
         <table className="table" data-testid="scorecard-metrics">
+          <caption className="table__caption">模型与简单基准的滚动验证指标对比</caption>
           <thead>
             <tr>
               <th scope="col">指标</th>
@@ -80,6 +91,10 @@ export function ScorecardTable({ scorecard }: ScorecardTableProps) {
           </tbody>
         </table>
       </div>
+      <details className="metric-help">
+        <summary>这些指标是什么意思？</summary>
+        <p>MAE表示预测收益与实际收益的平均绝对误差，越低越好；Brier Score衡量概率预测误差，越低越好。必须结合样本数和基准一起判断。</p>
+      </details>
     </div>
   );
 }

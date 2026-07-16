@@ -146,8 +146,8 @@ describe('研究页装配（spec §3.2）', () => {
   it('回补进行中（202）→ 首次回补状态，且不产生预测', async () => {
     installRoutes({
       snapshot: () => json({ data: RUNNING_JOB, request_id: 'r' }, 202),
-      predictionToday: () => json({ data: RUNNING_JOB, request_id: 'r' }, 202),
-      prediction5d: () => json({ data: RUNNING_JOB, request_id: 'r' }, 202),
+      predictionToday: () => json({ data: { backfill_job: RUNNING_JOB }, request_id: 'r' }, 202),
+      prediction5d: () => json({ data: { backfill_job: RUNNING_JOB }, request_id: 'r' }, 202),
     });
 
     const data = await loadResearchPage('600519');

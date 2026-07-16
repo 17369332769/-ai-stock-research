@@ -31,15 +31,21 @@ async def search_instruments(
     request_id: RequestIdDep,
     q: Annotated[str, Query(min_length=1, max_length=80, description="代码或公司名称")],
     universe: Annotated[Literal["CSI300"], Query(description="MVP 只支持 CSI300")] = "CSI300",
+    scope: Annotated[
+        Literal["csi300", "all"],
+        Query(description="csi300=当前成分；all=本地已知A股（用于额外自选）"),
+    ] = "csi300",
     limit: LimitQuery = 20,
 ) -> ListResponse[InstrumentDTO]:
-    items = await universe_service.search_instruments(
-        session,
-        universe,
-        q,
-        to_shanghai(now).date(),  # 只搜索查询日当前成分
-        resolve_limit(limit),
-    )
+    as_of = to_shanghai(now).date()
+    if scope == "all":
+        items = await universe_service.search_known_instruments(
+            session, q, as_of, resolve_limit(limit)
+        )
+    else:
+        items = await universe_service.search_instruments(
+            session, universe, q, as_of, resolve_limit(limit)
+        )
     # 搜索是"取前 N 条最相关"，不做游标分页
     return ListResponse[InstrumentDTO](
         data=items,

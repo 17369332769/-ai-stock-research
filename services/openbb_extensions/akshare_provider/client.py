@@ -30,6 +30,7 @@ from .transform import normalize_symbol
 ALLOWED_AKSHARE_FUNCTIONS: frozenset[str] = frozenset(
     {
         "stock_zh_a_spot_em",  # 实时行情快照
+        "stock_bid_ask_em",  # 指定代码的行情报价（002 主链路）
         "stock_zh_a_hist",  # 日线
         "stock_zh_a_hist_min_em",  # 分钟线
         "stock_news_em",  # 个股新闻
@@ -48,6 +49,14 @@ _spot_cache_expires_at = 0.0
 _spot_fetch_lock = asyncio.Lock()
 _spot_inflight: asyncio.Task[tuple[dict[str, Any], ...]] | None = None
 
+# 002：主链路按代码获取，不下载全市场。缓存与并发合并按 symbol 隔离，
+# 某一只失败不会污染其他股票的成功结果。
+QUOTE_CACHE_TTL_SECONDS = 12.0
+QUOTE_MAX_CONCURRENCY = 8
+_quote_cache: dict[str, tuple[float, tuple[dict[str, Any], ...]]] = {}
+_quote_inflight: dict[str, asyncio.Task[tuple[dict[str, Any], ...]]] = {}
+_quote_lock = asyncio.Lock()
+
 
 def _copy_records(records: tuple[dict[str, Any], ...]) -> list[dict[str, Any]]:
     return [dict(row) for row in records]
@@ -59,6 +68,8 @@ def reset_spot_cache() -> None:
     _spot_cache = None
     _spot_cache_expires_at = 0.0
     _spot_inflight = None
+    _quote_cache.clear()
+    _quote_inflight.clear()
 
 
 async def _load_spot_snapshot() -> tuple[dict[str, Any], ...]:
@@ -167,6 +178,67 @@ async def fetch_spot() -> list[dict[str, Any]]:
         if _spot_inflight is task:
             _spot_inflight = None
     return _copy_records(snapshot)
+
+
+async def fetch_bid_ask(symbol: str) -> list[dict[str, Any]]:
+    """指定一只股票的报价；12 秒内同代码请求合并。"""
+    code = normalize_symbol(symbol)
+    now = time.monotonic()
+    cached = _quote_cache.get(code)
+    if cached is not None and now < cached[0]:
+        return _copy_records(cached[1])
+
+    async with _quote_lock:
+        now = time.monotonic()
+        cached = _quote_cache.get(code)
+        if cached is not None and now < cached[0]:
+            return _copy_records(cached[1])
+        task = _quote_inflight.get(code)
+        if task is None:
+            task = asyncio.create_task(_load_bid_ask(code))
+            _quote_inflight[code] = task
+
+    try:
+        rows = await asyncio.shield(task)
+    except BaseException:
+        async with _quote_lock:
+            if _quote_inflight.get(code) is task and task.done():
+                _quote_inflight.pop(code, None)
+        raise
+
+    async with _quote_lock:
+        _quote_cache[code] = (time.monotonic() + QUOTE_CACHE_TTL_SECONDS, rows)
+        if _quote_inflight.get(code) is task:
+            _quote_inflight.pop(code, None)
+    return _copy_records(rows)
+
+
+async def _load_bid_ask(symbol: str) -> tuple[dict[str, Any], ...]:
+    rows = await acall_akshare("stock_bid_ask_em", symbol=symbol)
+    return tuple(dict(row) for row in rows)
+
+
+async def fetch_quotes(symbols: list[str]) -> dict[str, list[dict[str, Any]]]:
+    """并发获取指定代码；结果仍按代码分组，禁止整批失败时丢弃已成功股票。"""
+    codes = list(dict.fromkeys(normalize_symbol(symbol) for symbol in symbols))
+    semaphore = asyncio.Semaphore(QUOTE_MAX_CONCURRENCY)
+
+    async def one(code: str) -> tuple[str, list[dict[str, Any]]]:
+        async with semaphore:
+            return code, await fetch_bid_ask(code)
+
+    results = await asyncio.gather(*(one(code) for code in codes), return_exceptions=True)
+    out: dict[str, list[dict[str, Any]]] = {}
+    errors: list[str] = []
+    for code, result in zip(codes, results, strict=True):
+        if isinstance(result, BaseException):
+            errors.append(f"{code}: {type(result).__name__}: {result}")
+            continue
+        returned_code, rows = result
+        out[returned_code] = rows
+    if not out and errors:
+        raise ProviderUpstreamError("指定代码行情全部失败：" + "; ".join(errors[:5]))
+    return out
 
 
 async def fetch_daily(

@@ -86,6 +86,9 @@ export interface MockOverrides {
   bars?: Handler;
   documents?: Handler;
   analyses?: Handler;
+  analysisRefresh?: Handler;
+  quoteRefresh?: Handler;
+  backfill?: Handler;
   predictionLatest?: Handler;
   predictionHistory?: Handler;
   analogs?: Handler;
@@ -113,7 +116,20 @@ export const BACKFILL_JOB_QUEUED: JobDTO = {
 /** 默认全绿场景。各用例只覆盖需要的端点。 */
 function defaults(): Required<MockOverrides> {
   return {
-    watchlist: () => list(WATCHLIST as WatchlistItemDTO[]),
+    watchlist: (ctx) => {
+      const scope = ctx.url.searchParams.get('scope');
+      const rows = (WATCHLIST as WatchlistItemDTO[]).map((row) => ({
+        ...row,
+        pool_source: scope === 'extra' ? ('extra' as const) : ('csi300' as const),
+        can_remove: scope === 'extra',
+        industry: row.symbol === '600519' ? '食品饮料' : '银行',
+        has_anomaly: row.symbol === '600519',
+        has_documents: row.symbol === '600519',
+        has_prediction: true,
+        analysis_status: 'analyzed' as const,
+      }));
+      return list(scope === 'extra' ? rows.slice(0, 1) : rows);
+    },
     addWatchlist: (ctx) => {
       const symbol = (ctx.postData as { symbol?: string } | null)?.symbol ?? '600519';
       return envelope(
@@ -145,6 +161,32 @@ function defaults(): Required<MockOverrides> {
           ? ([ANOMALY_ANALYSIS] as AnalysisDTO[])
           : ([DOCUMENT_ANALYSIS] as AnalysisDTO[]),
       ),
+    analysisRefresh: (ctx) =>
+      envelope({
+        ...BACKFILL_JOB_QUEUED,
+        id: 'analysis-job-e2e',
+        job_type: 'analysis_refresh',
+        symbol: ctx.symbol,
+        total_steps: 1,
+        current_step: 'analyze',
+      }, 202),
+    quoteRefresh: (ctx) =>
+      envelope({
+        job: {
+          ...BACKFILL_JOB_QUEUED,
+          id: 'quote-job-e2e',
+          job_type: 'quote_refresh',
+          symbol: ctx.symbol,
+          total_steps: 1,
+          current_step: 'fetch_quote',
+        },
+        source: 'eastmoney_via_akshare',
+        estimated_seconds: 10,
+        retry_after_seconds: 0,
+        requested_at: '2026-07-14T09:50:00+08:00',
+      }, 202),
+    backfill: (ctx) =>
+      envelope({ ...BACKFILL_JOB_QUEUED, symbol: ctx.symbol }, 202),
     predictionLatest: (ctx) =>
       item(
         (ctx.horizon === 'today_close' ? PREDICTION_TODAY : PREDICTION_5D) as PredictionDTO,
@@ -193,15 +235,21 @@ function resolve(handlers: Required<MockOverrides>, ctx: MockContext): ApiResult
   const { method } = ctx;
 
   if (path.endsWith('/watchlist') && method === 'GET') return handlers.watchlist(ctx);
+  if (path.endsWith('/research-pool') && method === 'GET') return handlers.watchlist(ctx);
   if (path.endsWith('/watchlist') && method === 'POST') return handlers.addWatchlist(ctx);
+  if (path.endsWith('/extra-watchlist') && method === 'POST') return handlers.addWatchlist(ctx);
   if (path.endsWith('/watchlist/order') && method === 'PATCH') return handlers.reorderWatchlist(ctx);
   if (path.includes('/watchlist/') && method === 'DELETE') return handlers.removeWatchlist(ctx);
+  if (path.includes('/extra-watchlist/') && method === 'DELETE') return handlers.removeWatchlist(ctx);
   if (path.endsWith('/instruments/search')) return handlers.search(ctx);
   if (path.includes('/jobs/')) return handlers.job(ctx);
   if (path.endsWith('/snapshot')) return handlers.snapshot(ctx);
   if (path.endsWith('/bars')) return handlers.bars(ctx);
   if (path.endsWith('/documents')) return handlers.documents(ctx);
+  if (path.endsWith('/analyses/refresh') && method === 'POST') return handlers.analysisRefresh(ctx);
   if (path.endsWith('/analyses')) return handlers.analyses(ctx);
+  if (path.endsWith('/quote-refresh') && method === 'POST') return handlers.quoteRefresh(ctx);
+  if (path.endsWith('/backfill') && method === 'POST') return handlers.backfill(ctx);
   if (path.endsWith('/predictions/latest')) return handlers.predictionLatest(ctx);
   if (path.endsWith('/predictions/history')) return handlers.predictionHistory(ctx);
   if (path.endsWith('/analogs')) return handlers.analogs(ctx);

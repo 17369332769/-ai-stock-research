@@ -85,6 +85,27 @@ describe('行情状态：新鲜度只读 API（spec §5.1 / §3.2 红线）', ()
     expect(status.ageSeconds).toBe(640);
   });
 
+  it.each([46, 120])('age_status=delayed（%i秒）禁止标记实时', (age) => {
+    const status = resolveQuoteStatus(
+      { ...FRESH_QUOTE, age_status: 'delayed', data_age_seconds: age },
+      TRADING_MARKET,
+    );
+    expect(status.delayed).toBe(true);
+    expect(status.stale).toBe(false);
+    expect(status.isRealtime).toBe(false);
+    expect(status.ageSeconds).toBe(age);
+  });
+
+  it.each([121, 180, 181])('age_status=stale（%i秒）优先于兼容 freshness', (age) => {
+    const status = resolveQuoteStatus(
+      { ...FRESH_QUOTE, freshness: 'fresh', age_status: 'stale', data_age_seconds: age },
+      TRADING_MARKET,
+    );
+    expect(status.stale).toBe(true);
+    expect(status.isRealtime).toBe(false);
+    expect(status.ageSeconds).toBe(age);
+  });
+
   it('休市 → 休市状态，已有 Quote 只标为最近行情而非收盘价', () => {
     const status = resolveQuoteStatus(FRESH_QUOTE, CLOSED_MARKET);
     expect(status.closed).toBe(true);
@@ -93,9 +114,11 @@ describe('行情状态：新鲜度只读 API（spec §5.1 / §3.2 红线）', ()
     expect(status.priceLabel).toBe('最近行情');
   });
 
-  it('休市 + 过期同时成立时两条状态都保留，不互相吞掉', () => {
+  it('休市时改用最近交易时段语义，不继续套用盘中过期状态', () => {
     const status = resolveQuoteStatus(STALE_QUOTE, CLOSED_MARKET);
-    expect(status.states).toEqual(['market_closed', 'quote_stale']);
+    expect(status.states).toEqual(['market_closed']);
+    expect(status.stale).toBe(false);
+    expect(status.delayed).toBe(false);
     expect(status.isRealtime).toBe(false);
   });
 
@@ -159,7 +182,7 @@ describe('回补作业状态（spec §7.1）', () => {
 });
 
 describe('页面状态汇总', () => {
-  it('回补中 + 休市 + 过期 + 缺失同时展示', () => {
+  it('回补中 + 休市 + 缺失同时展示，休市不重复显示盘中过期', () => {
     const states = resolvePageStates({
       job: RUNNING_JOB,
       quote: STALE_QUOTE,
@@ -169,7 +192,7 @@ describe('页面状态汇总', () => {
     expect(states).toContain('initial_backfill');
     expect(states).toContain('partial_data');
     expect(states).toContain('market_closed');
-    expect(states).toContain('quote_stale');
+    expect(states).not.toContain('quote_stale');
   });
 
   it('数据源失败排在最前', () => {

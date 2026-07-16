@@ -99,6 +99,13 @@ async def refresh_analysis(session: AsyncSession, symbol: str) -> JobDTO:
     return JobDTO.from_row(job)
 
 
+async def retry_backfill(session: AsyncSession, symbol: str) -> JobDTO:
+    """重新登记单股三步回补；幂等键保证不会创建重复并行任务。"""
+    await _require_instrument(session, symbol)
+    job = await jobs_repo.enqueue_backfill(session, symbol)
+    return JobDTO.from_row(job)
+
+
 def _referenced_document_ids(rows: list[Analysis]) -> set[uuid.UUID]:
     ids: set[uuid.UUID] = set()
     for row in rows:

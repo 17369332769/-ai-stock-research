@@ -11,12 +11,15 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.core.clock import to_shanghai
-from apps.api.app.core.enums import CSI300_BENCHMARK_SYMBOL, CSI300_CODE
+from apps.api.app.core.enums import CSI300_BENCHMARK_SYMBOL, CSI300_CODE, JobType
 from apps.api.app.core.errors import InstrumentNotFound
 from apps.api.app.repositories import analyses as analyses_repo
 from apps.api.app.repositories import instruments as instruments_repo
+from apps.api.app.repositories import jobs as jobs_repo
 from apps.api.app.repositories import predictions as predictions_repo
 from apps.api.app.repositories import quotes as quotes_repo
+from apps.api.app.repositories import watchlist as watchlist_repo
+from apps.api.app.schemas.jobs import JobDTO
 from apps.api.app.schemas.quotes import RelativeStrengthDTO, SnapshotDTO
 from apps.api.app.services.freshness import change_percent, to_quote_dto
 from apps.api.app.services.market_state import current_market
@@ -40,6 +43,12 @@ async def get_snapshot(session: AsyncSession, symbol: str, now: datetime) -> Sna
     is_member = await instruments_repo.is_current_member(
         session, symbol, CSI300_CODE, to_shanghai(now).date()
     )
+    extra_item = await watchlist_repo.get(session, symbol)
+    was_member = await instruments_repo.was_member(session, symbol, CSI300_CODE)
+    backfill_job = await jobs_repo.latest_actionable(
+        session, symbol, JobType.INSTRUMENT_BACKFILL
+    )
+    analysis_job = await jobs_repo.latest_actionable(session, symbol, JobType.ANALYSIS_REFRESH)
 
     return SnapshotDTO(
         symbol=instrument.symbol,
@@ -50,6 +59,10 @@ async def get_snapshot(session: AsyncSession, symbol: str, now: datetime) -> Sna
         latest_anomaly_analysis_id=latest_anomaly,
         latest_predictions=latest_predictions,
         is_current_universe_member=is_member,
+        pool_source="csi300" if is_member else "extra" if extra_item is not None else None,
+        is_universe_exit=not is_member and extra_item is None and was_member,
+        backfill_job=JobDTO.from_row(backfill_job) if backfill_job is not None else None,
+        analysis_job=JobDTO.from_row(analysis_job) if analysis_job is not None else None,
     )
 
 

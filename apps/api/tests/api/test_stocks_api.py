@@ -130,6 +130,53 @@ async def test_snapshot_marks_removed_member(client: AsyncClient, session: Async
     body = (await client.get(f"/api/v1/stocks/{SYMBOL}/snapshot")).json()
 
     assert body["is_current_universe_member"] is False
+    assert body["is_universe_exit"] is True
+    assert body["pool_source"] is None
+
+
+async def test_snapshot_distinguishes_extra_watch_from_universe_exit(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    await seed_universe(session, AT_0950)
+    await seed_instrument(
+        session, AT_0950, symbol=OTHER_SYMBOL, name="平安银行", exchange="SZSE"
+    )
+    added = await client.post("/api/v1/extra-watchlist", json={"symbol": OTHER_SYMBOL})
+    assert added.status_code == 202
+
+    body = (await client.get(f"/api/v1/stocks/{OTHER_SYMBOL}/snapshot")).json()
+
+    assert body["is_current_universe_member"] is False
+    assert body["is_universe_exit"] is False
+    assert body["pool_source"] == "extra"
+    assert body["backfill_job"]["status"] == "queued"
+
+
+async def test_snapshot_restores_analysis_job_and_failed_backfill_can_be_requeued(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    await setup_member(session)
+    analysis = await client.post(f"/api/v1/stocks/{SYMBOL}/analyses/refresh")
+    assert analysis.status_code == 202
+
+    snapshot = (await client.get(f"/api/v1/stocks/{SYMBOL}/snapshot")).json()
+    assert snapshot["analysis_job"]["id"] == analysis.json()["data"]["id"]
+    assert snapshot["analysis_job"]["status"] == "queued"
+
+    backfill = await client.post(f"/api/v1/stocks/{SYMBOL}/backfill")
+    assert backfill.status_code == 202
+    assert backfill.json()["data"]["status"] == "queued"
+    job_id = UUID(backfill.json()["data"]["id"])
+    job = await session.get(Job, job_id)
+    assert job is not None
+    job.status = "failed"
+    job.error_code = "PROVIDER_UNAVAILABLE"
+    await session.flush()
+
+    retried = await client.post(f"/api/v1/stocks/{SYMBOL}/backfill")
+    assert retried.status_code == 202
+    assert retried.json()["data"]["id"] == str(job_id)
+    assert retried.json()["data"]["status"] == "queued"
 
 
 # ── 历史行情 ────────────────────────────────────────────────────────────────

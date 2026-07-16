@@ -112,6 +112,7 @@ async def generate_prediction(
     horizon: str,
     as_of: datetime,
     calendar: TradingCalendar | None = None,
+    allow_out_of_universe: bool = False,
 ) -> PredictionResult:
     """为单只股票生成一条预测并写入账本。"""
     trading_calendar = calendar or get_trading_calendar()
@@ -142,7 +143,7 @@ async def generate_prediction(
         raise InsufficientData(f"{session_day} 不是交易日，不生成预测")
 
     # ── 闸门 4：as_of 当日的成分股（调出后停止生成新预测）───────────────
-    if not await is_universe_member_at(session, symbol, session_day):
+    if not allow_out_of_universe and not await is_universe_member_at(session, symbol, session_day):
         raise NotUniverseMember(
             f"{symbol} 在 {session_day} 不是沪深300成分股，停止生成新预测"
             f"（既有预测继续结算）"
@@ -179,6 +180,8 @@ async def generate_prediction(
 
     # ── 置信度（spec §9.5）──────────────────────────────────────────────
     degradation_reasons = tuple(item.reason for item in snapshot.degradations)
+    if allow_out_of_universe:
+        degradation_reasons += ("非沪深300训练股票池，模型适用范围外推",)
     decision = decide_confidence(
         ConfidenceInputs(
             better_than_baseline=model.better_than_baseline,
@@ -186,7 +189,7 @@ async def generate_prediction(
             required_validation_predictions=model.required_validation_predictions,
             calibration_acceptable=model.calibration_acceptable,
             key_feature_psi=key_feature_psi,
-            degraded=snapshot.forces_low_confidence,
+            degraded=snapshot.forces_low_confidence or allow_out_of_universe,
             degradation_reasons=degradation_reasons,
         )
     )

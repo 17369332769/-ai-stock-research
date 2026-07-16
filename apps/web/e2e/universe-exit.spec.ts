@@ -13,6 +13,7 @@ test.describe('E2E-6 股票被调出沪深300', () => {
         body: {
           ...SNAPSHOT,
           is_current_universe_member: false,
+          is_universe_exit: true,
           universe_exit_at: '2026-06-30T00:00:00+08:00',
         },
       }),
@@ -63,6 +64,7 @@ test.describe('E2E-6 股票被调出沪深300', () => {
     });
 
     await page.goto('/');
+    await page.getByText('添加到我的关注').click();
     await page.getByTestId('instrument-search-input').fill('600519');
     await page.getByTestId('instrument-search-submit').click();
     await page.getByTestId('add-600519').click();

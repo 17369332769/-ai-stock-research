@@ -79,6 +79,20 @@ export function formatMetric(value: number | null | undefined, fractionDigits = 
   return value.toFixed(fractionDigits);
 }
 
+/** 成交量/成交额的紧凑展示；只改变单位，不推导新的业务指标。 */
+export function formatCompactNumber(
+  value: number | null | undefined,
+  unit = '',
+): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return EMPTY_PLACEHOLDER;
+  }
+  const absolute = Math.abs(value);
+  if (absolute >= 100_000_000) return `${(value / 100_000_000).toFixed(2)}亿${unit}`;
+  if (absolute >= 10_000) return `${(value / 10_000).toFixed(2)}万${unit}`;
+  return `${value.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}${unit}`;
+}
+
 /** age_seconds 由 API 提供，此处只做可读化，不做"是否过期"的判断。 */
 export function formatAgeSeconds(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) {

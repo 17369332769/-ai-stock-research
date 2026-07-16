@@ -6,8 +6,8 @@ import type { ClientErrorCode } from './api/types';
 const MESSAGES: Record<ClientErrorCode, string> = {
   INVALID_ARGUMENT: '请求参数无效，请检查代码或筛选条件。',
   INSTRUMENT_NOT_FOUND: '未找到该证券，或它不在本产品支持的市场范围内。',
-  NOT_CURRENT_UNIVERSE_MEMBER: '该股票不是当前沪深300成分股，无法添加。',
-  DUPLICATE_WATCHLIST_ITEM: '该股票已在自选股中，无需重复添加。',
+  NOT_CURRENT_UNIVERSE_MEMBER: '该股票不属于当前自动研究范围。',
+  DUPLICATE_WATCHLIST_ITEM: '该股票已在我的关注中，无需重复添加。',
   INSUFFICIENT_DATA: '历史样本不足，暂时无法生成结果。',
   PROVIDER_UNAVAILABLE: '上游数据源暂时不可用，已有历史数据仍可查看。',
   MODEL_UNAVAILABLE: '当前没有可用的模型版本，暂不生成预测。',

@@ -17,8 +17,9 @@ export function PredictionHistoryTable({ predictions }: PredictionHistoryTablePr
   }
 
   return (
-    <div className="table-scroll">
+    <div className="table-scroll" tabIndex={0} role="region" aria-label="历史预测记录，可横向滚动">
       <table className="table" data-testid="prediction-history-table">
+        <caption className="table__caption">逐条预测、实际结果与结算误差</caption>
         <thead>
           <tr>
             <th scope="col">预测时间</th>

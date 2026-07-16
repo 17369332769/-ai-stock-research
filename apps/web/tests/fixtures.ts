@@ -29,6 +29,8 @@ export const FRESH_QUOTE: QuoteDTO = {
   source: 'eastmoney_via_akshare',
   source_url: 'https://quote.eastmoney.com/sh600519.html',
   freshness: 'fresh',
+  age_status: 'latest',
+  data_age_seconds: 12,
   age_seconds: 12,
   previous_close: 1211.03,
 };
@@ -37,6 +39,8 @@ export const STALE_QUOTE: QuoteDTO = {
   ...FRESH_QUOTE,
   observed_at: '2026-07-14T09:40:00+08:00',
   freshness: 'stale',
+  age_status: 'stale',
+  data_age_seconds: 640,
   age_seconds: 640,
 };
 
@@ -405,6 +409,8 @@ export const WATCHLIST: WatchlistItemDTO[] = [
       observed_at: '2026-07-14T09:44:00+08:00',
       source: 'eastmoney_via_akshare',
       freshness: 'stale',
+      age_status: 'stale',
+      data_age_seconds: 380,
       age_seconds: 380,
     },
     market: TRADING_MARKET,

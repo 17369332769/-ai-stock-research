@@ -11,13 +11,14 @@ from decimal import Decimal
 
 import pytest
 
-from apps.api.app.core.enums import Freshness
+from apps.api.app.core.enums import Freshness, QuoteAgeStatus
 from apps.api.app.core.errors import ProviderUnavailable
 from apps.api.app.core.settings import get_settings
 from apps.api.app.models.tables import Quote
 from apps.api.app.services.freshness import (
     change_percent,
     compute_age_seconds,
+    compute_age_status,
     compute_freshness,
     to_quote_dto,
 )
@@ -52,6 +53,22 @@ def test_age_at_boundary_is_fresh() -> None:
 
 def test_age_past_boundary_is_stale() -> None:
     assert compute_freshness(181) is Freshness.STALE
+
+
+@pytest.mark.parametrize(
+    ("age", "expected"),
+    [
+        (45, QuoteAgeStatus.LATEST),
+        (46, QuoteAgeStatus.DELAYED),
+        (120, QuoteAgeStatus.DELAYED),
+        (121, QuoteAgeStatus.STALE),
+        (180, QuoteAgeStatus.STALE),
+        (181, QuoteAgeStatus.STALE),
+    ],
+)
+def test_age_status_boundaries(age: int, expected: QuoteAgeStatus) -> None:
+    """003：列表、详情与摘要共用的权威三档状态边界。"""
+    assert compute_age_status(age) is expected
 
 
 def test_age_seconds_never_negative() -> None:

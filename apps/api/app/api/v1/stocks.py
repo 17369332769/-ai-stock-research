@@ -71,6 +71,23 @@ async def refresh_quote(
     return ItemResponse[QuoteRefreshDTO](data=result, request_id=request_id)
 
 
+@router.post(
+    "/backfill",
+    response_model=ItemResponse[JobDTO],
+    status_code=status.HTTP_202_ACCEPTED,
+    responses=error_responses(400, 404),
+    summary="重新登记当前股票的历史数据回补任务",
+)
+async def retry_backfill(
+    symbol: SymbolPath,
+    session: SessionDep,
+    request_id: RequestIdDep,
+) -> ItemResponse[JobDTO]:
+    job = await research_service.retry_backfill(session, symbol)
+    await session.commit()
+    return ItemResponse[JobDTO](data=job, request_id=request_id)
+
+
 @router.get(
     "/bars",
     response_model=BarsResponse,

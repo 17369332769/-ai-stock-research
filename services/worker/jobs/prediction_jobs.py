@@ -29,7 +29,7 @@ from apps.api.app.core.enums import PredictionHorizon
 from apps.api.app.core.errors import AppError, InsufficientData, ModelUnavailable
 from apps.api.app.core.runtime import get_clock, get_trading_calendar
 from apps.api.app.core.trading_calendar import TradingCalendar, today_prediction_allowed
-from apps.api.app.models.tables import ModelVersion, Prediction, WatchlistItem
+from apps.api.app.models.tables import ModelVersion, Prediction
 from services.prediction.evaluation.drift import compute_drift
 from services.prediction.evaluation.drift_store import get_drift_store
 from services.prediction.evaluation.settlement import settle_due_predictions
@@ -38,6 +38,7 @@ from services.prediction.features.repository import universe_members_at
 from services.prediction.inference.loader import LoadedModel, load_model_bundle
 from services.prediction.inference.service import NotUniverseMember, generate_prediction
 from services.prediction.training.registry import active_model
+from services.worker.jobs.tracking_scope import tracking_symbols
 
 __all__ = [
     "compute_feature_drift",
@@ -63,11 +64,7 @@ async def _target_symbols(session: AsyncSession, day: date) -> list[str]:
 
     调出成分股的标的不再产生新预测（spec §3.1 / §9.3），但它的历史预测仍会被结算。
     """
-    watchlist = (await session.execute(select(WatchlistItem.symbol))).scalars().all()
-    if not watchlist:
-        return []
-    members = set(await universe_members_at(session, day))
-    return sorted(symbol for symbol in watchlist if symbol in members)
+    return await tracking_symbols(session, day)
 
 
 async def _run_batch(horizon: str) -> _BatchResult:
@@ -90,11 +87,17 @@ async def _run_batch(horizon: str) -> _BatchResult:
         symbols = await _target_symbols(session, day)
         if not symbols:
             return result
+        members = set(await universe_members_at(session, day))
 
         for symbol in symbols:
             try:
                 outcome = await generate_prediction(
-                    session, symbol=symbol, horizon=horizon, as_of=now, calendar=calendar
+                    session,
+                    symbol=symbol,
+                    horizon=horizon,
+                    as_of=now,
+                    calendar=calendar,
+                    allow_out_of_universe=symbol not in members,
                 )
             except NotUniverseMember as exc:
                 result.skipped += 1

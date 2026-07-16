@@ -6,8 +6,8 @@
 > 并由 `services/*/tests/` 的契约测试锁定 —— 改代码不改本文件（或反之）会让契约测试变红。
 
 - 文档版本：0.1.0（与 `pyproject.toml` 的 `version` 同步）
-- 最后更新：2026-07-14
-- 适用范围：A 股 AI 研究助手 MVP，沪深300 股票池
+- 最后更新：2026-07-15
+- 适用范围：A 股 AI 研究助手，沪深300自动研究池与额外自选
 
 ---
 
@@ -61,41 +61,42 @@ AKShare ─┐                                                                  
 | `source` 字段值 | `eastmoney_via_akshare`（与 spec §7.2 响应样例一致）|
 | 使用条款 | 东方财富公开页面数据；akshare 为 MIT 许可的抓取客户端。免费、无官方 SLA、**不得重新分发** |
 | 访问日期 | **未验证**（本次实现无外网）|
-| 频率限制 | 上游无公开配额；实测高频访问会被限流/封 IP。本项目节流：报价 15s/次（全市场快照单次请求覆盖所有自选股），K 线按标的串行 |
-| 延迟 | 快照通常 3–15 秒延迟；**不是交易所级实时**。`stock_zh_a_spot_em` **不返回时间戳**，`observed_at` = 我们的取数时刻（`Clock.now()`），不冒充撮合时间 |
+| 频率限制 | 上游无公开配额；高频访问可能被限流。本项目免费模式每15秒轮询20只，300只约225秒完成一轮；当前详情股票走独立单股刷新 |
+| 延迟 | **不是交易所级实时**。`stock_bid_ask_em` 不返回可靠行情时间，`market_time=NULL`，只把系统取得时刻写入 `fetched_at`，绝不冒充撮合时间 |
 | 复权 | 日线/分钟线固定 **前复权 `qfq`**。`bars.adjustment` 落 `qfq`，同表禁止混复权口径 |
-| 单位 | 成交量 = **手**（1 手 = 100 股）；成交额 = **元**。spot / daily / 5m 三接口口径一致 |
+| 单位 | 成交量 = **手**（1 手 = 100 股）；成交额 = **元**。quote / daily / 5m 三接口口径一致 |
 
 ### 2.1 允许调用的函数（spec §5.2 硬约束，运行时白名单强制）
 
-只允许这 4 个，白名单在 `akshare_provider/client.py:ALLOWED_AKSHARE_FUNCTIONS`，
+只允许下列 5 个，白名单在 `akshare_provider/client.py:ALLOWED_AKSHARE_FUNCTIONS`，
 越权调用抛 `ProviderConfigError`，由 `test_akshare_allowlist.py` 锁死：
 
 | akshare 函数 | 用途 | 参数 |
 |---|---|---|
-| `stock_zh_a_spot_em()` | 全市场实时快照 | 无参数（整表拉取后本地按 symbol 过滤）|
+| `stock_bid_ask_em()` | **生产主链路：指定代码报价** | `symbol`；逐股缓存、同代码并发合并 |
+| `stock_zh_a_spot_em()` | 旧契约兼容转换测试 | 生产报价 Fetcher 不再调用，后续主版本移除 |
 | `stock_zh_a_hist()` | 日线 | `symbol`, `period="daily"`, `start_date=YYYYMMDD`, `end_date=YYYYMMDD`, `adjust="qfq"` |
 | `stock_zh_a_hist_min_em()` | 5 分钟线 | `symbol`, `start_date="YYYY-MM-DD HH:MM:SS"`, `end_date=...`, `period="5"`, `adjust="qfq"` |
 | `stock_news_em()` | 个股新闻 | `symbol`（**不接受时间窗**，只返回最近约 100 条）|
 
 ### 2.2 返回列 → OpenBB Data 字段映射
 
-**`stock_zh_a_spot_em` → `EquityQuote`**（`akshare_provider/transform.py:transform_spot`）
+**`stock_bid_ask_em` → `EquityQuote`**（`akshare_provider/transform.py:transform_bid_ask`）
 
 | 上游列（中文）| OpenBB 字段 | 落库列 | 备注 |
 |---|---|---|---|
-| 代码 | `symbol` | `quotes.symbol` | 归一化去 `sh`/`sz` 前缀 |
-| 名称 | `name` | `instruments.name` | |
-| 最新价 | `last_price` | `quotes.price` | **必填**，缺失/非数值 → fail closed |
+| 请求参数 `symbol` | `symbol` | `quotes.symbol` / `latest_quotes.symbol` | 只返回请求代码 |
+| 最新 | `last_price` | `quotes.price` / `latest_quotes.price` | **必填**，缺失/非数值 → fail closed |
 | 昨收 | `prev_close` | `quotes.previous_close` | **必填**；`today_close` 目标的参考价 |
 | 今开 | `open` | `quotes.open` | |
 | 最高 / 最低 | `high` / `low` | `quotes.high` / `low` | |
-| 成交量 | `volume` | `quotes.volume` | 单位：手 |
-| 成交额 | `turnover` | `quotes.amount` | 单位：元 |
+| 总手 | `volume` | `quotes.volume` / `latest_quotes.volume` | 单位：手 |
+| 金额 | `turnover` | `quotes.amount` / `latest_quotes.amount` | 单位：元 |
 | 量比 | `volume_ratio` | `quotes.volume_ratio` | |
-| 涨跌幅 | `change_percent` | （只进 `raw_payload`）| 展示用涨跌幅由 `price/previous_close-1` 计算，不信上游 |
-| 换手率 | `turnover_rate` | （只进 `raw_payload`）| |
-| —（无此列）| `last_timestamp` | `quotes.observed_at` | = `Clock.now()`，见上文延迟说明 |
+| 涨幅 | `change_percent` | （只进 `raw_payload`）| 展示用涨跌幅由 `price/previous_close-1` 计算，不信上游 |
+| 换手 | `turnover_rate` | `quotes.turnover_rate` / `latest_quotes.turnover_rate` | |
+| `buy_1` / `sell_1` | `bid` / `ask` | `latest_quotes.bid1` / `ask1` | |
+| —（无可靠时间）| — | `latest_quotes.market_time=NULL` | 系统取得时刻单独落 `fetched_at` |
 
 **`stock_zh_a_hist` / `stock_zh_a_hist_min_em` → `EquityHistorical`**
 
@@ -152,13 +153,14 @@ GET /api/v1/news/company?provider=akshare&symbol=600519&start_date=2026-07-01&en
 | HTTP 429 / 5xx / 超时（30s）/ 网络错误 | `ProviderUnavailable`（424），并保留脱敏、截断后的 OpenBB `detail`。**不切源、不返回历史值冒充新报价** |
 | 字段缺失 / 类型改变 / 非有限数值 | `ProviderUnavailable` + 明确指出是哪个字段。**绝不用 0 或上一条填** |
 | 脏数据（负价、`prev_close=0`、high<low）| 网关原样透出 → `normalization.validate_*` **逐条拒收**并记入 `IngestReport.rejected` → 写进 `jobs.warnings` 与日志。整批全脏 → `ProviderUnavailable` |
-| 上游未返回某个自选股 | 不补零、不复制上一条；该标的自然进入 stale → 超过 `QUOTE_STALE_SECONDS`(180s) 显示 stale，从未取得则 API 返回 424 |
+| 上游未返回某个研究池股票 | 不补零、不复制上一条；只标记该股票缺失，其他成功报价照常写入 |
 | 5 分钟线不可得（新股/停牌/超出上游保留窗口）| **回补作业只记 warning，不使整项回补失败**（spec §7.1）|
 | 连续失败 3 次 | 数据源进入**降级状态**并冷却 300 秒，之后只做一次恢复探测；状态页展示失败作业 + 最后成功时间（spec §8）|
 
-`stock_zh_a_spot_em` 每次会分页下载整市场。OpenBB Provider 对成功结果保留 12 秒的
-**进程内瞬时快照**并合并并发请求；快照不会落盘、失败不会缓存、进程重启即清空。
-其作用只是避免定时刷新和多个手动刷新重复抓取整市场，不会在上游失败时返回旧行情。
+生产 Fetcher 只调用 `stock_bid_ask_em(symbol)`。每个代码保留12秒进程内缓存，
+相同代码并发请求合并；不同代码独立成功或失败。Worker 免费模式每批20只，
+正式批量行情服务尚未配置时主动降级为约2–5分钟一轮，不会以免费单股接口伪装15秒全量实时。
+`quotes` 快照保留30天并自动清理；页面批量读取一股一行的 `latest_quotes`。
 
 ### 2.7 容器代理
 

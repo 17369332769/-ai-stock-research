@@ -21,7 +21,7 @@ export function StateNotice({ state, detail, action }: StateNoticeProps) {
       className={`notice notice--${descriptor.tone}`}
       data-state={state}
       data-testid={`state-${state}`}
-      role="status"
+      role={descriptor.tone === 'danger' ? 'alert' : 'status'}
     >
       <div className="notice__body">
         <strong className="notice__label">{descriptor.label}</strong>
@@ -54,15 +54,21 @@ export function StateBadge({ state, title }: StateBadgeProps) {
 export interface StateNoticeListProps {
   states: UiState[];
   details?: Partial<Record<UiState, ReactNode>>;
+  actions?: Partial<Record<UiState, ReactNode>>;
 }
 
 /** 多个状态同时成立时全部展示（休市 + 过期不得互相吞掉）。 */
-export function StateNoticeList({ states, details }: StateNoticeListProps) {
+export function StateNoticeList({ states, details, actions }: StateNoticeListProps) {
   if (states.length === 0) return null;
   return (
     <div className="notice-list" data-testid="state-notice-list">
       {states.map((state) => (
-        <StateNotice key={state} state={state} detail={details?.[state]} />
+        <StateNotice
+          key={state}
+          state={state}
+          detail={details?.[state]}
+          action={actions?.[state]}
+        />
       ))}
     </div>
   );

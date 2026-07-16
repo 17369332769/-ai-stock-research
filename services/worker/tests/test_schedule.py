@@ -166,8 +166,12 @@ def test_inferred_jobs_have_sane_slots() -> None:
 # ── 交易日守卫覆盖面 ─────────────────────────────────────────────────────────────────────
 def test_user_requested_dispatchers_run_on_non_trading_days() -> None:
     non_gated = {spec.job_id for spec in SCHEDULE if not spec.trading_day_only}
-    # 用户主动发起的回补与单股行情刷新在周末也必须得到明确结果。
-    assert non_gated == {"backfill_dispatcher", "quote_refresh_dispatcher"}
+    # 用户主动发起的回补、行情和分析刷新在周末也必须得到明确结果。
+    assert non_gated == {
+        "backfill_dispatcher",
+        "quote_refresh_dispatcher",
+        "analysis_refresh_dispatcher",
+    }
 
 
 def test_every_job_has_triggers_and_unique_id() -> None:

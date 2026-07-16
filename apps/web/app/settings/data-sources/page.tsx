@@ -40,7 +40,7 @@ export default function DataSourcesPage() {
 
   return (
     <div data-testid="data-sources-page">
-      <h1 className="page-title">数据源与模型</h1>
+      <h1 className="page-title">系统状态</h1>
       <p className="page-subtitle">
         免费数据源不保证交易所级实时性。数据源连续失败后进入降级状态，此处展示具体失败源与最后成功时间。
       </p>

@@ -29,6 +29,7 @@ pytestmark = pytest.mark.contract
 def test_allowlist_is_exactly_the_audited_functions() -> None:
     assert {
         "stock_zh_a_spot_em",
+        "stock_bid_ask_em",
         "stock_zh_a_hist",
         "stock_zh_a_hist_min_em",
         "stock_news_em",

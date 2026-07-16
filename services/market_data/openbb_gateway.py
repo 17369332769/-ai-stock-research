@@ -420,6 +420,14 @@ class OpenBBHttpGateway:
                     volume=_opt_decimal(item, "volume", ctx),
                     amount=_opt_decimal(item, "turnover", ctx),
                     volume_ratio=_opt_decimal(item, "volume_ratio", ctx),
+                    turnover_rate=_opt_decimal(item, "turnover_rate", ctx),
+                    bid1=_opt_decimal(item, "bid", ctx),
+                    ask1=_opt_decimal(item, "ask", ctx),
+                    market_time=(
+                        _to_datetime(observed_raw, "last_timestamp", ctx, date_at=time(15, 0))
+                        if not _is_null(observed_raw)
+                        else None
+                    ),
                     source=_req_str(item, "source", ctx),
                     source_url=_opt_str(item, "source_url"),
                     observed_at=observed_at,

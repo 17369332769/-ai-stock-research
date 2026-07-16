@@ -1,7 +1,7 @@
 """OpenBB 标准模型 ``EquityQuote`` 的 AKShare 实现。
 
 REST 路由：``GET /api/v1/equity/price/quote?provider=akshare&symbol=600519,000001``
-上游函数：``stock_zh_a_spot_em``（全市场快照，本地按 symbol 过滤）
+上游函数：``stock_bid_ask_em``（严格按请求代码查询，不下载全市场）
 """
 
 from __future__ import annotations
@@ -16,9 +16,9 @@ from openbb_core.provider.standard_models.equity_quote import (
 )
 from pydantic import Field
 
-from ..client import fetch_spot
+from ..client import fetch_quotes
 from ..constants import SHANGHAI, SOURCE_NAME
-from ..transform import transform_spot
+from ..transform import transform_bid_ask
 
 
 class AKShareEquityQuoteQueryParams(EquityQuoteQueryParams):
@@ -53,11 +53,14 @@ class AKShareEquityQuoteFetcher(
         credentials: dict[str, str] | None,
         **kwargs: Any,
     ) -> list[dict[str, Any]]:
-        records = await fetch_spot()
         symbols = [s.strip() for s in query.symbol.split(",") if s.strip()]
-        # 快照没有上游时间戳：observed_at = 取数时刻（写进 docs，不冒充撮合时间）
         observed_at = datetime.now(tz=SHANGHAI)
-        return transform_spot(records, symbols, observed_at)
+        grouped = await fetch_quotes(symbols)
+        return [
+            transform_bid_ask(grouped[symbol], symbol, observed_at)
+            for symbol in symbols
+            if symbol in grouped
+        ]
 
     @staticmethod
     def transform_data(

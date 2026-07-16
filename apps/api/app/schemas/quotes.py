@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import Field
 
-from apps.api.app.core.enums import Freshness
+from apps.api.app.core.enums import Freshness, QuoteAgeStatus
 from apps.api.app.core.trading_calendar import MarketPhase
 from apps.api.app.schemas.common import BaseDTO
+from apps.api.app.schemas.jobs import JobDTO
 
 
 class MarketDTO(BaseDTO):
@@ -35,12 +37,16 @@ class QuoteDTO(BaseDTO):
     price: float
     previous_close: float
     change_percent: float = Field(description="price / previous_close - 1")
+    change_amount: float = Field(description="price - previous_close")
     open: float | None = None
     high: float | None = None
     low: float | None = None
     volume: float | None = None
     amount: float | None = None
     volume_ratio: float | None = Field(default=None, description="量比（F2）")
+    turnover_rate: float | None = Field(default=None, description="换手率（%）")
+    bid1: float | None = Field(default=None, description="买一价；来源未提供时为 null")
+    ask1: float | None = Field(default=None, description="卖一价；来源未提供时为 null")
     observed_at: datetime = Field(description="数据源观测时间（Asia/Shanghai）")
     market_time: datetime | None = Field(
         default=None,
@@ -50,9 +56,11 @@ class QuoteDTO(BaseDTO):
     source: str
     source_url: str | None = None
     freshness: Freshness
+    age_status: QuoteAgeStatus = Field(description="latest/delayed/stale 分级状态")
+    data_age_seconds: int = Field(description="距系统成功获取的秒数")
     age_seconds: int | None = Field(
         default=None,
-        description="行情已过期多少秒。仅在 freshness=stale 时出现（spec §7）；fresh 时为 null",
+        description="兼容字段：仅 freshness=stale 时出现",
     )
 
 
@@ -80,8 +88,25 @@ class SnapshotDTO(BaseDTO):
         default_factory=list, description="各 horizon 的最新预测 id；无预测时为空数组"
     )
     is_current_universe_member: bool = Field(
-        description="false ⇒ 前端展示「已调出沪深300」（spec §3.1）"
+        description="是否属于查询日沪深300；false 也可能只是普通范围外关注"
     )
+    pool_source: Literal["csi300", "extra"] | None = Field(
+        default=None,
+        description="当前研究池来源；未在研究池时为 null",
+    )
+    is_universe_exit: bool = Field(
+        default=False,
+        description="仅曾属于沪深300、当前已调出且不是额外关注时为 true",
+    )
+    backfill_job: JobDTO | None = Field(
+        default=None,
+        description="可恢复的排队、运行或失败回补作业",
+    )
+    analysis_job: JobDTO | None = Field(
+        default=None,
+        description="可恢复的排队、运行或失败分析刷新作业",
+    )
+    missing: list[str] = Field(default_factory=list)
 
 
 class SnapshotResponse(SnapshotDTO):

@@ -31,6 +31,7 @@ from apps.api.app.models.tables import (
     Bar,
     Document,
     Instrument,
+    LatestQuote,
     Quote,
     Universe,
     UniverseMembership,
@@ -272,6 +273,7 @@ async def upsert_quotes(
                 "volume": quote.volume,
                 "amount": quote.amount,
                 "volume_ratio": quote.volume_ratio,
+                "turnover_rate": quote.turnover_rate,
                 "source": quote.source,
                 "source_url": quote.source_url,
                 "raw_payload": _jsonable(quote.raw_payload),
@@ -294,12 +296,61 @@ async def upsert_quotes(
             "volume": stmt.excluded.volume,
             "amount": stmt.excluded.amount,
             "volume_ratio": stmt.excluded.volume_ratio,
+            "turnover_rate": stmt.excluded.turnover_rate,
             "source": stmt.excluded.source,
             "source_url": stmt.excluded.source_url,
             "raw_payload": stmt.excluded.raw_payload,
         },
     )
     await session.execute(stmt)
+
+    latest_rows = [
+        {
+            "symbol": quote.symbol,
+            "price": quote.price,
+            "previous_close": quote.previous_close,
+            "open": quote.open,
+            "high": quote.high,
+            "low": quote.low,
+            "volume": quote.volume,
+            "amount": quote.amount,
+            "volume_ratio": quote.volume_ratio,
+            "turnover_rate": quote.turnover_rate,
+            "bid1": quote.bid1,
+            "ask1": quote.ask1,
+            "market_time": quote.market_time,
+            "fetched_at": now,
+            "source": quote.source,
+            "source_url": quote.source_url,
+            "raw_payload": _jsonable(quote.raw_payload),
+        }
+        for quote in quotes
+        if not validate_quote(quote, now)
+    ]
+    latest_stmt = pg_insert(LatestQuote).values(latest_rows)
+    latest_stmt = latest_stmt.on_conflict_do_update(
+        index_elements=[LatestQuote.symbol],
+        set_={
+            "price": latest_stmt.excluded.price,
+            "previous_close": latest_stmt.excluded.previous_close,
+            "open": latest_stmt.excluded.open,
+            "high": latest_stmt.excluded.high,
+            "low": latest_stmt.excluded.low,
+            "volume": latest_stmt.excluded.volume,
+            "amount": latest_stmt.excluded.amount,
+            "volume_ratio": latest_stmt.excluded.volume_ratio,
+            "turnover_rate": latest_stmt.excluded.turnover_rate,
+            "bid1": latest_stmt.excluded.bid1,
+            "ask1": latest_stmt.excluded.ask1,
+            "market_time": latest_stmt.excluded.market_time,
+            "fetched_at": latest_stmt.excluded.fetched_at,
+            "source": latest_stmt.excluded.source,
+            "source_url": latest_stmt.excluded.source_url,
+            "raw_payload": latest_stmt.excluded.raw_payload,
+        },
+        where=latest_stmt.excluded.fetched_at >= LatestQuote.fetched_at,
+    )
+    await session.execute(latest_stmt)
     report.written = len(rows)
     return report
 

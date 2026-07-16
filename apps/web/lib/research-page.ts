@@ -109,14 +109,16 @@ async function loadPrediction(
   try {
     const response = await getLatestPrediction(symbol, horizon);
     if (response.status === 202) {
+      if (!('backfill_job' in response.data)) throw new Error('预测回补响应缺少 backfill_job');
       return {
         horizon,
         prediction: null,
         state: 'initial_backfill',
         message: '数据回补完成前不生成预测。',
-        job: response.data as unknown as JobDTO,
+        job: response.data.backfill_job,
       };
     }
+    if ('backfill_job' in response.data) throw new Error('预测响应状态与数据不一致');
     return { horizon, prediction: response.data, state: null, message: null, job: null };
   } catch (error) {
     return {

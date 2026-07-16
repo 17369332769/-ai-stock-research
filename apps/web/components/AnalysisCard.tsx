@@ -64,7 +64,7 @@ export function AnalysisCard({ analysis }: AnalysisCardProps) {
       ) : null}
 
       <div className="analysis__evidence">
-        <h4 className="analysis__evidence-title">证据</h4>
+        <h3 className="analysis__evidence-title">证据</h3>
         <EvidenceList evidence={analysis.evidence} />
       </div>
 

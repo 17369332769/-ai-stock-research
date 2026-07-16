@@ -5,7 +5,7 @@ import { installApi } from './mock-api';
 
 /**
  * E2E-3 研究页
- * E2E-8 行情过期（180 秒红线）
+ * E2E-8 行情过期（120 秒展示口径）
  * E2E-9 休市
  */
 
@@ -32,7 +32,7 @@ test.describe('E2E-3 研究页', () => {
     await page.getByTestId('history-period-5m').click();
     await expect(page.getByTestId('historical-line-chart')).toHaveAttribute(
       'aria-label',
-      /5 分钟线.*2 条/,
+      /5 分钟收盘价.*2 条/,
     );
 
     // 区块顺序
@@ -108,7 +108,7 @@ test.describe('E2E-3 研究页', () => {
   });
 });
 
-test.describe('E2E-8 行情过期（>180 秒）', () => {
+test.describe('E2E-8 行情过期（>120 秒）', () => {
   test('整页显示「行情可能已过期」，且不把旧行情标记为实时', async ({ page }) => {
     await installApi(page, {
       snapshot: () => ({ status: 200, body: { ...SNAPSHOT, quote: STALE_QUOTE } }),
@@ -118,7 +118,7 @@ test.describe('E2E-8 行情过期（>180 秒）', () => {
 
     // 整页状态条
     await expect(page.getByTestId('state-quote_stale')).toContainText('行情可能已过期');
-    await expect(page.getByTestId('state-quote_stale')).toContainText('180');
+    await expect(page.getByTestId('state-quote_stale')).toContainText('120');
     // 头部徽标
     await expect(page.getByTestId('badge-quote_stale')).toBeVisible();
     // 红线：不得标记实时

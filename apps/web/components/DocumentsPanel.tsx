@@ -90,6 +90,7 @@ export function DocumentsPanel({ documents, analyses }: DocumentsPanelProps) {
                     data-testid="document-link"
                   >
                     {doc.title}
+                    <span className="sr-only">（将在新窗口打开）</span>
                   </a>
                 </div>
                 <div className="documents__meta">

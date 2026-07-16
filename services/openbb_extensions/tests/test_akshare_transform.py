@@ -14,6 +14,7 @@ from apps.api.app.core.clock import SHANGHAI
 from services.openbb_extensions.akshare_provider.constants import ProviderDataError
 from services.openbb_extensions.akshare_provider.transform import (
     normalize_symbol,
+    transform_bid_ask,
     transform_daily,
     transform_minute,
     transform_news,
@@ -24,7 +25,33 @@ from services.openbb_extensions.tests.conftest import load_json
 pytestmark = pytest.mark.contract
 
 
-# ── 行情快照 ────────────────────────────────────────────────────────────────
+def test_bid_ask_maps_requested_symbol_without_fake_market_time(now: datetime) -> None:
+    rows = [
+        {"item": "最新", "value": 10.25},
+        {"item": "昨收", "value": 10.0},
+        {"item": "今开", "value": 10.1},
+        {"item": "最高", "value": 10.3},
+        {"item": "最低", "value": 9.98},
+        {"item": "总手", "value": 1200},
+        {"item": "金额", "value": 1230000},
+        {"item": "量比", "value": 1.2},
+        {"item": "涨幅", "value": 2.5},
+        {"item": "换手", "value": 0.8},
+        {"item": "buy_1", "value": 10.24},
+        {"item": "sell_1", "value": 10.25},
+    ]
+
+    item = transform_bid_ask(rows, "000001", now)
+
+    assert item["symbol"] == "000001"
+    assert item["last_price"] == 10.25
+    assert item["bid"] == 10.24
+    assert item["ask"] == 10.25
+    assert item["turnover_rate"] == 0.8
+    assert "last_timestamp" not in item
+
+
+# ── 行情快照（旧兼容转换；生产主链路已使用指定代码接口）────────────────────
 def test_spot_maps_all_contract_columns(now: datetime) -> None:
     records = load_json("akshare_spot_em_raw.json")
     out = transform_spot(records, ["600519"], now)

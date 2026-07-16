@@ -12,14 +12,20 @@ export interface AddStockPanelProps {
   /** 添加失败时页面回传的错误（409 非成分股 / 409 重复）。 */
   addError?: unknown;
   adding?: boolean;
+  addedSymbol?: string | null;
+  onResetError?: () => void;
 }
 
 /**
- * 添加自选股（spec §3.1）。
- * 搜索只返回查询日沪深300当前成分（由 API 保证）；
- * 非成分股与重复添加由 API 分别返回 409 NOT_CURRENT_UNIVERSE_MEMBER / DUPLICATE_WATCHLIST_ITEM。
+ * 添加额外自选。当前沪深300已自动进入研究池，只允许添加其他本地已知 A 股。
  */
-export function AddStockPanel({ onAdd, addError, adding }: AddStockPanelProps) {
+export function AddStockPanel({
+  onAdd,
+  addError,
+  adding,
+  addedSymbol = null,
+  onResetError,
+}: AddStockPanelProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<InstrumentDTO[]>([]);
   const [searchError, setSearchError] = useState<unknown>(null);
@@ -46,17 +52,21 @@ export function AddStockPanel({ onAdd, addError, adding }: AddStockPanelProps) {
   }
 
   const addErrorCode = errorCodeOf(addError);
+  const directSymbol = /^\d{6}$/.test(query.trim()) ? query.trim() : null;
 
   return (
     <div className="add-stock" data-testid="add-stock-panel">
       <form className="add-stock__form" onSubmit={handleSearch} role="search">
         <label className="field">
-          <span className="field__label">按代码或名称搜索沪深300成分股</span>
+          <span className="field__label">按代码或名称搜索额外关注股票</span>
           <input
             className="field__input"
             type="search"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              onResetError?.();
+            }}
             placeholder="例如 600519 或 贵州茅台"
             data-testid="instrument-search-input"
           />
@@ -89,9 +99,24 @@ export function AddStockPanel({ onAdd, addError, adding }: AddStockPanelProps) {
       ) : null}
 
       {searched && !searching && results.length === 0 && !searchError ? (
-        <p className="empty-hint" data-testid="search-empty">
-          没有匹配的当前沪深300成分股。非成分股不可添加。
-        </p>
+        <div data-testid="search-empty">
+          <p className="empty-hint">
+            {directSymbol
+              ? '本地尚无这只股票的名称，可先按代码加入；名称将在后续基础信息同步后更新。'
+              : '没有匹配的本地已知股票。可输入完整6位股票代码直接加入。'}
+          </p>
+          {directSymbol ? (
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={adding || addedSymbol === directSymbol}
+              onClick={() => onAdd(directSymbol)}
+              data-testid={`add-${directSymbol}`}
+            >
+              {addedSymbol === directSymbol ? '已加入我的关注' : '按代码加入我的关注'}
+            </button>
+          ) : null}
+        </div>
       ) : null}
 
       {results.length > 0 ? (
@@ -103,14 +128,21 @@ export function AddStockPanel({ onAdd, addError, adding }: AddStockPanelProps) {
               {instrument.industry ? (
                 <span className="add-stock__industry">{instrument.industry}</span>
               ) : null}
+              {instrument.is_current_universe_member ? (
+                <span className="badge badge--ok">已在沪深300研究池</span>
+              ) : null}
               <button
                 type="button"
                 className="btn btn--primary"
-                disabled={adding}
+                disabled={adding || instrument.is_current_universe_member || addedSymbol === instrument.symbol}
                 onClick={() => onAdd(instrument.symbol)}
                 data-testid={`add-${instrument.symbol}`}
               >
-                加入自选
+                {instrument.is_current_universe_member
+                  ? '无需添加'
+                  : addedSymbol === instrument.symbol
+                    ? '已加入我的关注'
+                    : '加入我的关注'}
               </button>
             </li>
           ))}

@@ -110,11 +110,18 @@ export function PredictionPanel({
         </div>
         <div className="prediction__cell">
           <dt>模型版本</dt>
-          <dd data-testid="prediction-model-version">
-            {prediction.model.key} · {prediction.model.version}
-          </dd>
+          <dd data-testid="prediction-model-version">{prediction.model.version}</dd>
         </div>
       </dl>
+
+      <details className="prediction__details">
+        <summary>查看模型技术信息</summary>
+        <p>模型标识：<code>{prediction.model.key}</code></p>
+      </details>
+
+      <p className="prediction__explanation">
+        P20 / P80 表示模型历史分布中较保守与较乐观的边界，实际结果仍可能落在区间之外。
+      </p>
 
       <details className="prediction__details" data-testid="prediction-validation">
         <summary>查看滚动验证表现</summary>

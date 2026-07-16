@@ -255,7 +255,7 @@ describe('WatchlistTable：排序、搜索、数据新鲜度（spec §13.1）', 
     expect(screen.getAllByTestId('watchlist-row')).toHaveLength(2);
   });
 
-  it('回补中的自选股展示首次回补徽标', () => {
+  it('回补状态放在研究状态列，不覆盖行情新鲜度', () => {
     render(
       <WatchlistTable
         items={[{ ...WATCHLIST[0]!, backfill_job: RUNNING_JOB }]}
@@ -263,7 +263,8 @@ describe('WatchlistTable：排序、搜索、数据新鲜度（spec §13.1）', 
         onMove={noop}
       />,
     );
-    expect(screen.getByTestId('badge-initial_backfill')).toBeInTheDocument();
+    expect(screen.getByTestId('row-analysis-status')).toHaveTextContent('首次回补');
+    expect(screen.getByTestId('badge-fresh')).toBeInTheDocument();
   });
 
   it('已调出沪深300的自选股带标记', () => {

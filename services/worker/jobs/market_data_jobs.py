@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from functools import partial
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.app.core.clock import SHANGHAI, Clock
@@ -39,7 +39,8 @@ from apps.api.app.core.errors import (
 )
 from apps.api.app.core.runtime import get_clock, get_trading_calendar
 from apps.api.app.core.trading_calendar import TradingCalendar
-from apps.api.app.models.tables import Instrument, Job, WatchlistItem
+from apps.api.app.models.tables import Instrument, Job, Quote, UniverseMembership
+from apps.api.app.repositories import jobs as jobs_repo
 from services.market_data.ingest import (
     IngestReport,
     sync_universe_members,
@@ -49,6 +50,7 @@ from services.market_data.ingest import (
     upsert_quotes,
 )
 from services.market_data.openbb_gateway import create_gateway
+from services.worker.jobs.tracking_scope import tracking_symbols
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +72,12 @@ DAILY_RECONCILE_DAYS = 10  # 日线每次回看 10 个自然日做对账
 MINUTE_LOOKBACK_DAYS = 1  # 分钟线只补当日
 ANNOUNCEMENT_LOOKBACK_DAYS = 3
 NEWS_LOOKBACK_DAYS = 2
+
+# 免费单股接口的降级轮询：每 15 秒处理 20 只，300 只约 225 秒完成一轮。
+# 当前详情页走独立 quote_refresh，不受此游标影响。
+FREE_QUOTE_BATCH_SIZE = 20
+_quote_batch_cursor = 0
+QUOTE_HISTORY_RETENTION_DAYS = 30
 
 # 回补窗口（spec §9.3：日线至少回补 3 年）
 BACKFILL_DAILY_YEARS = 3
@@ -174,10 +182,8 @@ async def _guarded[T](source: str, clock: Clock, call: Callable[[], Awaitable[T]
 
 # ── 公共小工具 ──────────────────────────────────────────────────────────────
 async def _watchlist_symbols(session: AsyncSession) -> list[str]:
-    rows = await session.execute(
-        select(WatchlistItem.symbol).order_by(WatchlistItem.display_order, WatchlistItem.symbol)
-    )
-    return list(rows.scalars().all())
+    """兼容旧函数名；实际返回完整研究范围。"""
+    return await tracking_symbols(session, get_clock().now().date())
 
 
 def _log_report(job: str, report: IngestReport) -> None:
@@ -220,37 +226,59 @@ async def sync_csi300_universe() -> None:
         )
 
     async with session_scope() as session:
+        before = set(
+            (
+                await session.execute(
+                    select(UniverseMembership.symbol).where(
+                        UniverseMembership.universe_code == CSI300_CODE,
+                        UniverseMembership.effective_to.is_(None),
+                    )
+                )
+            ).scalars().all()
+        )
         report = await upsert_instruments(session, instruments, now)
         report.merge(
             await sync_universe_members(session, members, as_of, now, calendar, CSI300_CODE)
         )
+        added = sorted({member.symbol for member in members} - before)
+        for symbol in added:
+            if await jobs_repo.succeeded_backfill(session, symbol) is None:
+                await jobs_repo.enqueue_backfill(session, symbol)
+        if added:
+            report.warnings.append(f"新调入 {len(added)} 只股票已加入历史数据回补队列")
     _log_report("沪深300 成分同步", report)
 
 
 # ── 作业 2：自选股报价 ──────────────────────────────────────────────────────
 async def ingest_watchlist_quotes() -> None:
-    """09:25-11:30 / 13:00-15:00 每 15 秒。180 秒后前端标 stale（由 freshness_of 判定）。"""
+    """研究池报价。免费来源按小批轮询，避免 300 只在一个请求内逐股打爆上游。"""
+    global _quote_batch_cursor
     clock = get_clock()
     now = clock.now()
 
     async with session_scope() as session:
         symbols = await _watchlist_symbols(session)
     if not symbols:
-        logger.debug("自选股为空，跳过报价采集")
+        logger.debug("研究池为空，跳过报价采集")
         return
+
+    start = _quote_batch_cursor % len(symbols)
+    doubled = symbols + symbols
+    requested = doubled[start : start + min(FREE_QUOTE_BATCH_SIZE, len(symbols))]
+    _quote_batch_cursor = (start + len(requested)) % len(symbols)
 
     async with create_gateway() as gateway:
         quotes = await _guarded(
-            HEALTH_MARKET_QUOTES, clock, lambda: gateway.get_quotes(symbols, now)
+            HEALTH_MARKET_QUOTES, clock, lambda: gateway.get_quotes(requested, now)
         )
 
-    missing = sorted(set(symbols) - {quote.symbol for quote in quotes})
+    missing = sorted(set(requested) - {quote.symbol for quote in quotes})
     async with session_scope() as session:
         report = await upsert_quotes(session, quotes, now)
     if missing:
         # 上游没返回这些标的 —— 不补零、不复制上一条，让它们自然变 stale/unavailable
         report.warnings.append(f"上游未返回报价：{', '.join(missing)}")
-    _log_report("自选股报价", report)
+    _log_report(f"研究池报价（{len(requested)} 只）", report)
 
 
 # ── 作业 3：5 分钟 K 线 ─────────────────────────────────────────────────────
@@ -310,6 +338,13 @@ async def ingest_daily_bars() -> None:
             async with session_scope() as session:
                 report.merge(await upsert_bars(session, bars, now))
     _log_report("日线", report)
+    # quotes 只作短期排障/聚合快照；latest_quotes 永久保留最后一行，不受清理影响。
+    async with session_scope() as session:
+        await session.execute(
+            delete(Quote).where(
+                Quote.observed_at < now - timedelta(days=QUOTE_HISTORY_RETENTION_DAYS)
+            )
+        )
 
 
 # ── 作业 5：公告 ───────────────────────────────────────────────────────────

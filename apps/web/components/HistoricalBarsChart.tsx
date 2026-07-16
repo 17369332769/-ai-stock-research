@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { LineChart } from 'echarts/charts';
 import { AriaComponent, GridComponent, TooltipComponent } from 'echarts/components';
 import * as echarts from 'echarts/core';
@@ -27,6 +27,7 @@ export function HistoricalBarsChart({
   rangeLabel = '全部',
 }: HistoricalBarsChartProps) {
   const chartRef = useRef<HTMLDivElement>(null);
+  const chartDescriptionId = useId();
   const latest = bars[bars.length - 1];
   const isMinute = latest?.timeframe === '5m';
 
@@ -36,9 +37,10 @@ export function HistoricalBarsChart({
     if (!container || container.clientWidth === 0 || bars.length === 0) return;
 
     const chart = echarts.init(container, undefined, { renderer: 'svg' });
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const formatMoment = isMinute ? formatDateTime : formatDate;
     chart.setOption({
-      animationDuration: 350,
+      animationDuration: reduceMotion ? 0 : 350,
       aria: {
         enabled: true,
         description: `历史${isMinute ? '5 分钟' : '日线'}收盘价，共 ${bars.length} 条。`,
@@ -193,9 +195,13 @@ export function HistoricalBarsChart({
         className="history-chart__echarts"
         role="img"
         aria-label={`历史${periodLabel}收盘价，共 ${bars.length} 条`}
+        aria-describedby={chartDescriptionId}
         data-testid="historical-line-chart"
         data-chart-library="echarts"
       />
+      <span id={chartDescriptionId} className="sr-only">
+        {rangeLabel}，起点 {formatPrice(bars[0]?.close)} 元，终点 {formatPrice(currentLatest.close)} 元。{trendText}
+      </span>
 
       <div className="history-chart__footer">
         <span>
@@ -225,6 +231,34 @@ export function HistoricalBarsChart({
           dataType={isMinute ? '5 分钟行情' : '历史日线'}
         />
       </div>
+      <details className="history-data-table" data-testid="historical-data-table">
+        <summary>查看历史行情数据表</summary>
+        <div className="table-scroll" tabIndex={0} role="region" aria-label="历史行情逐点数据，可横向滚动">
+          <table className="table">
+            <caption className="table__caption">
+              {rangeLabel}{periodLabel}数据，价格口径为{currentLatest.adjustment === 'qfq' ? '前复权' : currentLatest.adjustment}
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">{isMinute ? '交易时间' : '日期'}</th>
+                <th scope="col">收盘价</th>
+                <th scope="col">涨跌额</th>
+                <th scope="col">涨跌幅</th>
+              </tr>
+            </thead>
+            <tbody>
+              {bars.map((bar) => (
+                <tr key={bar.bar_time}>
+                  <td>{formatMoment(bar.bar_time)}</td>
+                  <td>{formatPrice(bar.close)} 元</td>
+                  <td>{bar.change_amount == null ? '—' : `${bar.change_amount > 0 ? '+' : ''}${formatPrice(bar.change_amount)} 元`}</td>
+                  <td>{formatRatioAsPercent(bar.change_percent)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
       <span className="sr-only" data-testid="historical-source">
         {currentLatest.source}
       </span>

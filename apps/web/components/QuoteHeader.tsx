@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { MARKET_PHASE_LABELS, STALE_THRESHOLD_SECONDS } from '@/lib/constants';
-import { changeTone, formatAgeSeconds, formatDate, formatDateTime, formatPrice, formatRatioAsPercent } from '@/lib/format';
+import { changeTone, formatAgeSeconds, formatCompactNumber, formatDate, formatDateTime, formatPrice, formatRatioAsPercent } from '@/lib/format';
 import { resolveQuoteStatus } from '@/lib/ui-state';
 import type { MarketDTO, QuoteDTO, RelativeStrengthDTO } from '@/lib/api/types';
 import { StateBadge } from './StateNotice';
@@ -16,6 +16,8 @@ export interface QuoteHeaderProps {
   /** 已调出沪深300（spec §3.1）。 */
   exited?: boolean;
   missingAction?: ReactNode;
+  /** 已有行情但延迟/过期时显示的上游刷新操作。 */
+  refreshAction?: ReactNode;
 }
 
 /**
@@ -33,6 +35,7 @@ export function QuoteHeader({
   relativeStrength,
   exited,
   missingAction,
+  refreshAction,
 }: QuoteHeaderProps) {
   const status = resolveQuoteStatus(quote, market);
   const tone = changeTone(quote?.change_percent);
@@ -52,6 +55,11 @@ export function QuoteHeader({
           ) : null}
           {status.closed ? <StateBadge state="market_closed" /> : null}
           {status.stale ? <StateBadge state="quote_stale" /> : null}
+          {status.delayed ? (
+            <span className="badge badge--warning" data-testid="badge-delayed">
+              行情可能延迟
+            </span>
+          ) : null}
           {status.isRealtime ? (
             <span className="badge badge--ok" data-testid="badge-realtime">
               实时
@@ -81,6 +89,7 @@ export function QuoteHeader({
               className={`quote-header__change quote-header__change--${tone}`}
               data-testid="quote-change-percent"
             >
+              {quote.change_amount == null ? '' : `${quote.change_amount > 0 ? '+' : ''}${formatPrice(quote.change_amount)} · `}
               {formatRatioAsPercent(quote.change_percent)}
             </span>
           </div>
@@ -117,10 +126,26 @@ export function QuoteHeader({
             <div>
               <dt>数据年龄</dt>
               <dd data-testid="quote-freshness">
-                {status.stale
-                  ? `已过期（距上次更新 ${formatAgeSeconds(status.ageSeconds)}，阈值 ${STALE_THRESHOLD_SECONDS} 秒）`
-                  : '3 分钟内（新鲜）'}
+                {status.closed
+                  ? `${formatAgeSeconds(status.ageSeconds)}前获取（最近交易时段）`
+                  : status.stale
+                    ? `已过期（${formatAgeSeconds(status.ageSeconds)}前获取，阈值 ${STALE_THRESHOLD_SECONDS} 秒）`
+                    : status.delayed
+                      ? `可能延迟（${formatAgeSeconds(status.ageSeconds)}前获取）`
+                      : `${formatAgeSeconds(status.ageSeconds)}前获取（最新 / 新鲜）`}
               </dd>
+            </div>
+            <div>
+              <dt>今开 / 最高 / 最低 / 昨收</dt>
+              <dd>{formatPrice(quote.open)} / {formatPrice(quote.high)} / {formatPrice(quote.low)} / {formatPrice(quote.previous_close)}</dd>
+            </div>
+            <div>
+              <dt>成交量 / 成交额</dt>
+              <dd>{formatCompactNumber(quote.volume, '股')} / {formatCompactNumber(quote.amount, '元')}</dd>
+            </div>
+            <div>
+              <dt>换手率 / 量比</dt>
+              <dd>{quote.turnover_rate == null ? '—' : `${quote.turnover_rate.toFixed(2)}%`} / {quote.volume_ratio == null ? '—' : quote.volume_ratio.toFixed(2)}</dd>
             </div>
             {status.closed && market ? (
               <div>
@@ -147,6 +172,7 @@ export function QuoteHeader({
           {missingAction}
         </div>
       )}
+      {quote && refreshAction ? <div className="quote-header__refresh-action">{refreshAction}</div> : null}
     </header>
   );
 }

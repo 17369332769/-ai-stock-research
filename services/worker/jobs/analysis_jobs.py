@@ -32,7 +32,7 @@ from apps.api.app.core.db import session_scope
 from apps.api.app.core.enums import AnalysisType
 from apps.api.app.core.runtime import get_clock, get_trading_calendar
 from apps.api.app.core.trading_calendar import TradingCalendar
-from apps.api.app.models.tables import Analysis, WatchlistItem
+from apps.api.app.models.tables import Analysis
 from services.research.agents.analyst import analyze_anomaly, analyze_document, draft_to_json
 from services.research.agents.client import ChatClient, build_chat_client
 from services.research.agents.repository import SqlResearchReadRepository
@@ -42,6 +42,7 @@ from services.research.anomaly import (
     session_bounds,
     uncovered_signals,
 )
+from services.worker.jobs.tracking_scope import tracking_symbols
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,28 @@ async def refresh_analyses() -> None:
         except Exception:  # 单只证券失败不得影响其余（spec §14.2）
             logger.exception("refresh_analyses 处理 %s 失败", symbol)
     logger.info("refresh_analyses 完成 created=%d", created)
+
+
+async def run_analysis_refresh(_job_id: uuid.UUID, symbol: str) -> None:
+    """执行用户主动发起的单股分析刷新；异常向上抛出，由 dispatcher 写入失败终态。"""
+    as_of = get_clock().now()
+    client = build_chat_client()
+    created = await _refresh_symbol_analyses(symbol, as_of=as_of, client=client)
+    calendar = get_trading_calendar()
+    anomaly_created = False
+    if calendar.is_trading_day(to_shanghai(as_of).date()):
+        anomaly_created = await _detect_symbol_anomaly(
+            symbol,
+            as_of=as_of,
+            calendar=calendar,
+            client=client,
+        )
+    logger.info(
+        "单股分析刷新完成 symbol=%s document_analyses=%d anomaly=%s",
+        symbol,
+        created,
+        anomaly_created,
+    )
 
 
 async def detect_anomalies() -> None:
@@ -106,10 +129,7 @@ async def detect_anomalies() -> None:
 
 async def _watchlist_symbols() -> list[str]:
     async with session_scope() as session:
-        stmt = select(WatchlistItem.symbol).order_by(
-            WatchlistItem.display_order.asc(), WatchlistItem.id.asc()
-        )
-        return list((await session.execute(stmt)).scalars().all())
+        return await tracking_symbols(session, to_shanghai(get_clock().now()).date())
 
 
 async def _document_watermark(session: AsyncSession, symbol: str) -> datetime | None:

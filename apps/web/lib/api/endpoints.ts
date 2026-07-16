@@ -22,6 +22,7 @@ import type {
   DocumentType,
   InstrumentDTO,
   JobDTO,
+  PendingBackfillDTO,
   QuoteRefreshDTO,
   PredictionDTO,
   PredictionHorizon,
@@ -47,6 +48,20 @@ export function getWatchlist(query: WatchlistQuery = {}) {
     limit: query.limit,
     q: query.q,
   });
+}
+
+export type ResearchPoolScope = 'csi300' | 'extra' | 'all';
+
+export function getResearchPool(scope: ResearchPoolScope = 'all', q?: string) {
+  return apiGetList<WatchlistItemDTO>('/research-pool', { scope, q });
+}
+
+export function addExtraWatchlistItem(symbol: string) {
+  return apiPost<WatchlistAddResultDTO>('/extra-watchlist', { symbol });
+}
+
+export function removeExtraWatchlistItem(symbol: string) {
+  return apiDelete<unknown>(`/extra-watchlist/${encodeURIComponent(symbol)}`);
 }
 
 /** 成绩单选择器需要完整代码集合，因此显式遍历服务端游标。 */
@@ -80,6 +95,7 @@ export function reorderWatchlist(symbols: string[]) {
 export function searchInstruments(query: string, limit = 20) {
   return apiGetList<InstrumentDTO>('/instruments/search', {
     universe: 'CSI300',
+    scope: 'all',
     q: query,
     limit,
   });
@@ -118,6 +134,10 @@ export function refreshQuote(symbol: string) {
   return apiPost<QuoteRefreshDTO>(`/stocks/${encodeURIComponent(symbol)}/quote-refresh`);
 }
 
+export function retryBackfill(symbol: string) {
+  return apiPost<JobDTO>(`/stocks/${encodeURIComponent(symbol)}/backfill`);
+}
+
 // --- 文档与解释（spec §7.3）----------------------------------------------
 
 export function getDocuments(symbol: string, type?: DocumentType, limit = 50) {
@@ -132,15 +152,13 @@ export function getAnalyses(symbol: string, type?: AnalysisType) {
 }
 
 export function refreshAnalyses(symbol: string) {
-  return apiPost<AnalysisDTO | { job: JobDTO }>(
-    `/stocks/${encodeURIComponent(symbol)}/analyses/refresh`,
-  );
+  return apiPost<JobDTO>(`/stocks/${encodeURIComponent(symbol)}/analyses/refresh`);
 }
 
 // --- 预测（spec §7.4）----------------------------------------------------
 
 export function getLatestPrediction(symbol: string, horizon: PredictionHorizon) {
-  return apiGetItem<PredictionDTO>(
+  return apiGetItem<PredictionDTO | PendingBackfillDTO>(
     `/stocks/${encodeURIComponent(symbol)}/predictions/latest`,
     { horizon },
   );

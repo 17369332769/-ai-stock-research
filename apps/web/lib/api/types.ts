@@ -90,6 +90,7 @@ export interface MarketDTO {
 export interface QuoteDTO {
   price: number;
   change_percent: number;
+  change_amount?: number;
   observed_at: string;
   /** 上游明确给出的行情时间；当前来源未提供时为 null。 */
   market_time?: string | null;
@@ -98,6 +99,8 @@ export interface QuoteDTO {
   source: string;
   source_url?: string | null;
   freshness: Freshness;
+  age_status?: 'latest' | 'delayed' | 'stale';
+  data_age_seconds?: number;
   /** 仅 stale 时由 API 附带（spec §7）。前端不得自行用本地时钟计算。 */
   age_seconds?: number | null;
   previous_close?: number | null;
@@ -107,6 +110,9 @@ export interface QuoteDTO {
   volume?: number | null;
   amount?: number | null;
   volume_ratio?: number | null;
+  turnover_rate?: number | null;
+  bid1?: number | null;
+  ask1?: number | null;
 }
 
 export interface RelativeStrengthDTO {
@@ -169,6 +175,8 @@ export interface InstrumentDTO {
   exchange?: 'SSE' | 'SZSE';
   industry?: string | null;
   listed_at?: string | null;
+  active?: boolean;
+  is_current_universe_member?: boolean;
 }
 
 export interface WatchlistItemDTO {
@@ -176,13 +184,27 @@ export interface WatchlistItemDTO {
   display_order: number;
   name?: string;
   universe_code?: string;
-  /** false = 已调出沪深300：保留页面与既有预测，停止新预测（spec §3.1）。 */
+  pool_source?: 'csi300' | 'extra';
+  can_remove?: boolean;
+  model_scope_warning?: string | null;
+  analysis_status?: 'waiting' | 'queued' | 'analyzing' | 'analyzed' | 'failed';
+  analysis_updated_at?: string | null;
+  industry?: string | null;
+  has_anomaly?: boolean;
+  anomaly_strength?: number | null;
+  has_documents?: boolean;
+  document_count?: number;
+  latest_document_at?: string | null;
+  has_prediction?: boolean;
+  prediction_count?: number;
+  /** 是否属于当前沪深300；额外关注通常为 false，不等于“已调出”。 */
   is_current_universe_member: boolean;
   universe_exit_at?: string | null;
   quote?: QuoteDTO | null;
   market?: MarketDTO | null;
   /** 首次回补进行中时随行返回。 */
   backfill_job?: JobDTO | null;
+  analysis_job?: JobDTO | null;
   /** 部分数据缺失时，API 标注缺失的数据域。 */
   missing?: string[];
 }
@@ -223,6 +245,10 @@ export interface QuoteRefreshDTO {
   requested_at: string;
 }
 
+export interface PendingBackfillDTO {
+  backfill_job: JobDTO;
+}
+
 /** POST /watchlist 首次添加返回 202 的 data 形状（spec §7.1）。 */
 export interface WatchlistAddResultDTO {
   watchlist_item: { symbol: string; display_order: number };
@@ -242,8 +268,11 @@ export interface SnapshotDTO {
   latest_predictions: string[];
   market?: MarketDTO | null;
   is_current_universe_member: boolean;
+  pool_source?: 'csi300' | 'extra' | null;
+  is_universe_exit?: boolean;
   universe_exit_at?: string | null;
   backfill_job?: JobDTO | null;
+  analysis_job?: JobDTO | null;
   missing?: string[];
 }
 

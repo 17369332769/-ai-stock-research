@@ -57,7 +57,7 @@ export const STATE_DESCRIPTORS: Record<UiState, StateDescriptor> = {
   quote_stale: {
     label: '行情可能已过期',
     tone: 'warning',
-    description: '行情已超过 180 秒未更新，不作为实时行情使用。',
+    description: '行情已超过 120 秒未更新，不作为实时行情使用。',
   },
   quote_unavailable: {
     label: '暂无实时行情',
@@ -130,12 +130,14 @@ export function isMarketClosed(market: MarketDTO | null | undefined): boolean {
 }
 
 export interface QuoteStatus {
-  /** 页面级状态：休市与过期可同时成立，两条都要展示。 */
+  /** 页面级状态：休市时使用最近交易时段语义，不再套用盘中延迟/过期。 */
   states: UiState[];
   /** 价格标签。红线：过期或休市时禁止标"实时"。 */
   priceLabel: string;
   /** 是否允许以实时口径展示。 */
   isRealtime: boolean;
+  ageStatus: 'latest' | 'delayed' | 'stale' | 'unavailable';
+  delayed: boolean;
   stale: boolean;
   closed: boolean;
   unavailable: boolean;
@@ -145,7 +147,8 @@ export interface QuoteStatus {
 
 /**
  * 行情状态判定。
- * 只读 API 的 quote.freshness / quote.age_seconds / market.phase，不比较本地时钟。
+ * 只读 API 的 quote.age_status / quote.data_age_seconds / market.phase，不比较本地时钟。
+ * 老接口没有 age_status 时才回退到 freshness，避免同一报价在列表与详情出现不同口径。
  */
 export function resolveQuoteStatus(
   quote: QuoteDTO | null | undefined,
@@ -153,7 +156,11 @@ export function resolveQuoteStatus(
 ): QuoteStatus {
   const closed = isMarketClosed(market);
   const unavailable = quote == null;
-  const stale = quote?.freshness === 'stale';
+  const ageStatus = quote == null
+    ? 'unavailable'
+    : quote.age_status ?? (quote.freshness === 'stale' ? 'stale' : 'latest');
+  const stale = !closed && ageStatus === 'stale';
+  const delayed = !closed && ageStatus === 'delayed';
   const states: UiState[] = [];
 
   if (closed) states.push('market_closed');
@@ -163,10 +170,8 @@ export function resolveQuoteStatus(
   const inContinuousTrading =
     market != null && CONTINUOUS_TRADING_PHASES.includes(market.phase);
 
-  // 只有"API 明确标记 fresh"才敢称实时：
-  // 没有行情、缺 freshness 字段、休市、非连续竞价时段，一律不是实时。
-  const fresh = quote?.freshness === 'fresh';
-  const isRealtime = fresh && !closed && (market == null || inContinuousTrading);
+  // 只有 API 明确标记 latest 才敢称实时；delayed 即使兼容字段仍为 fresh 也不能称实时。
+  const isRealtime = ageStatus === 'latest' && !closed && (market == null || inContinuousTrading);
 
   let priceLabel: string;
   if (closed) {
@@ -190,11 +195,13 @@ export function resolveQuoteStatus(
     states,
     priceLabel,
     isRealtime,
+    ageStatus,
+    delayed,
     stale,
     closed,
     unavailable,
     availabilityLabel,
-    ageSeconds: quote?.age_seconds ?? null,
+    ageSeconds: quote?.data_age_seconds ?? quote?.age_seconds ?? null,
   };
 }
 
@@ -236,8 +243,7 @@ export interface PageStateInput {
 
 /**
  * 汇总页面顶部需要展示的状态条。顺序即展示优先级。
- * 注意：不做互斥裁剪 —— 休市 + 过期 + 部分缺失可以同时展示，
- * 绝不能因为休市就吞掉"行情可能已过期"（spec §3.2 红线）。
+ * 休市时行情年龄仍可作为获取时间展示，但不用盘中“延迟/过期”语义。
  */
 export function resolvePageStates(input: PageStateInput): UiState[] {
   const states: UiState[] = [];

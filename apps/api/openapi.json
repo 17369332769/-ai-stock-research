@@ -1255,6 +1255,32 @@
         "title": "ListResponse[PredictionDTO]",
         "type": "object"
       },
+      "ListResponse_QuoteDTO_": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/QuoteDTO"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageInfo"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data",
+          "page",
+          "request_id"
+        ],
+        "title": "ListResponse[QuoteDTO]",
+        "type": "object"
+      },
       "ListResponse_WatchlistItemDTO_": {
         "additionalProperties": false,
         "properties": {
@@ -1631,6 +1657,16 @@
         "title": "PredictionResponse",
         "type": "object"
       },
+      "QuoteAgeStatus": {
+        "description": "交易时段的分级行情年龄；休市时由 market 状态覆盖实时语义。",
+        "enum": [
+          "latest",
+          "delayed",
+          "stale"
+        ],
+        "title": "QuoteAgeStatus",
+        "type": "string"
+      },
       "QuoteDTO": {
         "additionalProperties": false,
         "description": "近实时行情。\n\nspec §7.2 的示例只列出 price/change_percent/observed_at/source/freshness；\n这里额外带上 F2 明确要求的**成交量与量比**，以及 stale 时必须出现的 ``age_seconds``。",
@@ -1644,8 +1680,12 @@
                 "type": "null"
               }
             ],
-            "description": "行情已过期多少秒。仅在 freshness=stale 时出现（spec §7）；fresh 时为 null",
+            "description": "兼容字段：仅 freshness=stale 时出现",
             "title": "Age Seconds"
+          },
+          "age_status": {
+            "$ref": "#/components/schemas/QuoteAgeStatus",
+            "description": "latest/delayed/stale 分级状态"
           },
           "amount": {
             "anyOf": [
@@ -1658,10 +1698,44 @@
             ],
             "title": "Amount"
           },
+          "ask1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "卖一价；来源未提供时为 null",
+            "title": "Ask1"
+          },
+          "bid1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "买一价；来源未提供时为 null",
+            "title": "Bid1"
+          },
+          "change_amount": {
+            "description": "price - previous_close",
+            "title": "Change Amount",
+            "type": "number"
+          },
           "change_percent": {
             "description": "price / previous_close - 1",
             "title": "Change Percent",
             "type": "number"
+          },
+          "data_age_seconds": {
+            "description": "距系统成功获取的秒数",
+            "title": "Data Age Seconds",
+            "type": "integer"
           },
           "fetched_at": {
             "description": "本系统取得该行情的时间（Asia/Shanghai）",
@@ -1751,6 +1825,18 @@
             "title": "Symbol",
             "type": "string"
           },
+          "turnover_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "换手率（%）",
+            "title": "Turnover Rate"
+          },
           "volume": {
             "anyOf": [
               {
@@ -1780,10 +1866,13 @@
           "price",
           "previous_close",
           "change_percent",
+          "change_amount",
           "observed_at",
           "fetched_at",
           "source",
-          "freshness"
+          "freshness",
+          "age_status",
+          "data_age_seconds"
         ],
         "title": "QuoteDTO",
         "type": "object"
@@ -1991,9 +2080,37 @@
         "additionalProperties": false,
         "description": "spec §7.2 的响应是**裸对象**（不带 data 包裹）；§7 又要求所有响应带 request_id，\n因此在裸对象上追加 request_id 字段（同时也在 ``X-Request-Id`` 响应头返回）。",
         "properties": {
+          "analysis_job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobDTO"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "可恢复的排队、运行或失败分析刷新作业"
+          },
+          "backfill_job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobDTO"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "可恢复的排队、运行或失败回补作业"
+          },
           "is_current_universe_member": {
-            "description": "false ⇒ 前端展示「已调出沪深300」（spec §3.1）",
+            "description": "是否属于查询日沪深300；false 也可能只是普通范围外关注",
             "title": "Is Current Universe Member",
+            "type": "boolean"
+          },
+          "is_universe_exit": {
+            "default": false,
+            "description": "仅曾属于沪深300、当前已调出且不是额外关注时为 true",
+            "title": "Is Universe Exit",
             "type": "boolean"
           },
           "latest_anomaly_analysis_id": {
@@ -2020,9 +2137,32 @@
           "market": {
             "$ref": "#/components/schemas/MarketDTO"
           },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing",
+            "type": "array"
+          },
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "pool_source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "csi300",
+                  "extra"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "当前研究池来源；未在研究池时为 null",
+            "title": "Pool Source"
           },
           "quote": {
             "anyOf": [
@@ -2176,27 +2316,173 @@
         "additionalProperties": false,
         "description": "自选股条目。\n\nspec §7.1 的 POST 示例只回 ``{\"symbol\", \"display_order\"}``；\n这里是它的超集：首页自选股表格需要 name / 行情 / 新鲜度，而\n**前端不得自行计算数据新鲜度**（spec §5.1），所以必须由 API 提供。",
         "properties": {
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
+          "analysis_job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobDTO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "analysis_status": {
+            "default": "waiting",
+            "enum": [
+              "waiting",
+              "queued",
+              "analyzing",
+              "analyzed",
+              "failed"
+            ],
+            "title": "Analysis Status",
             "type": "string"
+          },
+          "analysis_updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analysis Updated At"
+          },
+          "anomaly_strength": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anomaly Strength"
+          },
+          "backfill_job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobDTO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "can_remove": {
+            "default": true,
+            "title": "Can Remove",
+            "type": "boolean"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
           },
           "display_order": {
             "title": "Display Order",
             "type": "integer"
           },
+          "document_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Document Count",
+            "type": "integer"
+          },
+          "has_anomaly": {
+            "default": false,
+            "title": "Has Anomaly",
+            "type": "boolean"
+          },
+          "has_documents": {
+            "default": false,
+            "title": "Has Documents",
+            "type": "boolean"
+          },
+          "has_prediction": {
+            "default": false,
+            "title": "Has Prediction",
+            "type": "boolean"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry"
+          },
           "is_current_universe_member": {
-            "description": "false ⇒ 「已调出沪深300」：保留展示，停止新预测（spec §3.1）",
+            "description": "是否属于当前沪深300；额外关注通常为 false，不代表曾被调出",
             "title": "Is Current Universe Member",
             "type": "boolean"
+          },
+          "latest_document_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Document At"
           },
           "market": {
             "$ref": "#/components/schemas/MarketDTO",
             "description": "API 判定的当前市场时段"
           },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing",
+            "type": "array"
+          },
+          "model_scope_warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Scope Warning"
+          },
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "pool_source": {
+            "default": "extra",
+            "enum": [
+              "csi300",
+              "extra"
+            ],
+            "title": "Pool Source",
+            "type": "string"
+          },
+          "prediction_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Prediction Count",
+            "type": "integer"
           },
           "quote": {
             "anyOf": [
@@ -2218,7 +2504,6 @@
           "symbol",
           "name",
           "display_order",
-          "created_at",
           "is_current_universe_member",
           "market"
         ],
@@ -2234,6 +2519,128 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/extra-watchlist": {
+      "post": {
+        "operationId": "add_extra_watchlist_api_v1_extra_watchlist_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddWatchlistRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemResponse_WatchlistAddedDTO_"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemResponse_WatchlistAddedDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INVALID_ARGUMENT：代码、分页或时间参数无效"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INSTRUMENT_NOT_FOUND：证券不存在或不在 MVP 市场范围"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "NOT_CURRENT_UNIVERSE_MEMBER / DUPLICATE_WATCHLIST_ITEM"
+          }
+        },
+        "summary": "添加非沪深300股票到额外自选",
+        "tags": [
+          "research-pool"
+        ]
+      }
+    },
+    "/api/v1/extra-watchlist/{symbol}": {
+      "delete": {
+        "operationId": "delete_extra_watchlist_api_v1_extra_watchlist__symbol__delete",
+        "parameters": [
+          {
+            "description": "6 位 A 股代码，例如 600519",
+            "in": "path",
+            "name": "symbol",
+            "required": true,
+            "schema": {
+              "description": "6 位 A 股代码，例如 600519",
+              "examples": [
+                "600519"
+              ],
+              "pattern": "^\\d{6}$",
+              "title": "Symbol",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INVALID_ARGUMENT：代码、分页或时间参数无效"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INSTRUMENT_NOT_FOUND：证券不存在或不在 MVP 市场范围"
+          }
+        },
+        "summary": "移除额外自选（不删除任何历史研究数据）",
+        "tags": [
+          "research-pool"
+        ]
+      }
+    },
     "/api/v1/instruments/search": {
       "get": {
         "operationId": "search_instruments_api_v1_instruments_search_get",
@@ -2261,6 +2668,22 @@
               "default": "CSI300",
               "description": "MVP 只支持 CSI300",
               "title": "Universe",
+              "type": "string"
+            }
+          },
+          {
+            "description": "csi300=当前成分；all=本地已知A股（用于额外自选）",
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "default": "csi300",
+              "description": "csi300=当前成分；all=本地已知A股（用于额外自选）",
+              "enum": [
+                "csi300",
+                "all"
+              ],
+              "title": "Scope",
               "type": "string"
             }
           },
@@ -2451,6 +2874,139 @@
         "summary": "模型成绩单（settled + pending = eligible；未到目标时间的预测不进分母）",
         "tags": [
           "predictions"
+        ]
+      }
+    },
+    "/api/v1/quotes/latest": {
+      "get": {
+        "operationId": "get_latest_quotes_api_v1_quotes_latest_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "enum": [
+                "csi300",
+                "extra",
+                "all"
+              ],
+              "title": "Scope",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListResponse_QuoteDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INVALID_ARGUMENT：代码、分页或时间参数无效"
+          },
+          "424": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "PROVIDER_UNAVAILABLE：上游数据源失败且无可用结果"
+          }
+        },
+        "summary": "批量读取研究范围的最后成功报价",
+        "tags": [
+          "research-pool"
+        ]
+      }
+    },
+    "/api/v1/research-pool": {
+      "get": {
+        "operationId": "get_research_pool_api_v1_research_pool_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "enum": [
+                "csi300",
+                "extra",
+                "all"
+              ],
+              "title": "Scope",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListResponse_WatchlistItemDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INVALID_ARGUMENT：代码、分页或时间参数无效"
+          },
+          "424": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "PROVIDER_UNAVAILABLE：上游数据源失败且无可用结果"
+          }
+        },
+        "summary": "沪深300自动研究池、额外自选或合并范围",
+        "tags": [
+          "research-pool"
         ]
       }
     },
@@ -2719,6 +3275,64 @@
           }
         },
         "summary": "触发解释刷新（登记 analysis_refresh 作业，由 worker 执行）",
+        "tags": [
+          "stocks"
+        ]
+      }
+    },
+    "/api/v1/stocks/{symbol}/backfill": {
+      "post": {
+        "operationId": "retry_backfill_api_v1_stocks__symbol__backfill_post",
+        "parameters": [
+          {
+            "description": "6 位 A 股代码，例如 600519",
+            "in": "path",
+            "name": "symbol",
+            "required": true,
+            "schema": {
+              "description": "6 位 A 股代码，例如 600519",
+              "examples": [
+                "600519"
+              ],
+              "pattern": "^\\d{6}$",
+              "title": "Symbol",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemResponse_JobDTO_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INVALID_ARGUMENT：代码、分页或时间参数无效"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INSTRUMENT_NOT_FOUND：证券不存在或不在 MVP 市场范围"
+          }
+        },
+        "summary": "重新登记当前股票的历史数据回补任务",
         "tags": [
           "stocks"
         ]

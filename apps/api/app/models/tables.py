@@ -136,6 +136,36 @@ class Quote(Base):
     volume: Mapped[Decimal | None] = mapped_column(Numeric(24, 4))
     amount: Mapped[Decimal | None] = mapped_column(Numeric(24, 4))
     volume_ratio: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
+    turnover_rate: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
+    source: Mapped[str] = mapped_column(String(40), nullable=False)
+    source_url: Mapped[str | None] = mapped_column(Text)
+    raw_payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+
+
+class LatestQuote(Base):
+    """每只股票最后一次成功报价。
+
+    ``quotes`` 继续承担短期快照与审计；页面和批量列表从本表读取，避免每次对
+    快照历史做 ``DISTINCT ON``。上游没有明确行情时间时 ``market_time`` 必须为空，
+    ``fetched_at`` 只表示本系统取得数据的时间。
+    """
+
+    __tablename__ = "latest_quotes"
+
+    symbol: Mapped[str] = mapped_column(String(12), ForeignKey("instruments.symbol"), primary_key=True)
+    price: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    previous_close: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    open: Mapped[Decimal | None] = mapped_column(Numeric(18, 4))
+    high: Mapped[Decimal | None] = mapped_column(Numeric(18, 4))
+    low: Mapped[Decimal | None] = mapped_column(Numeric(18, 4))
+    volume: Mapped[Decimal | None] = mapped_column(Numeric(24, 4))
+    amount: Mapped[Decimal | None] = mapped_column(Numeric(24, 4))
+    volume_ratio: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
+    turnover_rate: Mapped[Decimal | None] = mapped_column(Numeric(12, 4))
+    bid1: Mapped[Decimal | None] = mapped_column(Numeric(18, 4))
+    ask1: Mapped[Decimal | None] = mapped_column(Numeric(18, 4))
+    market_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     source: Mapped[str] = mapped_column(String(40), nullable=False)
     source_url: Mapped[str | None] = mapped_column(Text)
     raw_payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)

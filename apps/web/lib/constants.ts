@@ -16,8 +16,9 @@ export const BETTER_THAN_BASELINE_LABEL = '优于基准';
 /** spec §3.1：调出成分股后的标记。 */
 export const UNIVERSE_EXITED_LABEL = '已调出沪深300';
 
-/** spec §3.2：行情过期红线阈值，仅用于文案说明；判定由 API 给出。 */
-export const STALE_THRESHOLD_SECONDS = 180;
+/** 002/003：行情状态阈值仅用于文案；最终判定始终由 API 的 age_status 给出。 */
+export const LATEST_QUOTE_THRESHOLD_SECONDS = 45;
+export const STALE_THRESHOLD_SECONDS = 120;
 
 export const HORIZON_LABELS = {
   today_close: '今日收盘',

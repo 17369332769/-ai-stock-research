@@ -83,6 +83,14 @@ class Freshness(StrEnum):
     STALE = "stale"
 
 
+class QuoteAgeStatus(StrEnum):
+    """交易时段的分级行情年龄；休市时由 market 状态覆盖实时语义。"""
+
+    LATEST = "latest"
+    DELAYED = "delayed"
+    STALE = "stale"
+
+
 # 回补作业的固定步骤（spec §7.1）
 BACKFILL_STEPS: tuple[str, ...] = ("daily_bars", "minute_bars", "documents")
 

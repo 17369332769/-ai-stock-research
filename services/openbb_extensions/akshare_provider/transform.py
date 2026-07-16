@@ -240,6 +240,50 @@ def transform_spot(
     return out
 
 
+def transform_bid_ask(
+    records: Iterable[Record], symbol: str, observed_at: datetime
+) -> dict[str, Any]:
+    """``stock_bid_ask_em`` 的 item/value 行转为单股标准报价。
+
+    上游没有可靠撮合时间，因此不输出 ``last_timestamp``；``observed_at`` 仅用于
+    校验调用时刻带时区，最终由业务层单独记录 fetched_at。
+    """
+    if observed_at.tzinfo is None:
+        raise ProviderDataError("observed_at 必须带时区")
+    code = normalize_symbol(symbol)
+    ctx = f"stock_bid_ask_em[{code}]"
+    values: dict[str, Any] = {}
+    for row in records:
+        item = _required_str(row, "item", ctx)
+        values[item] = _require(row, "value", ctx)
+
+    def required(name: str) -> float:
+        return _required_float(values, name, ctx)
+
+    def optional(name: str) -> float | None:
+        return _optional_float(values, name, ctx)
+
+    return {
+        "symbol": code,
+        "last_price": required("最新"),
+        "prev_close": required("昨收"),
+        "open": optional("今开"),
+        "high": optional("最高"),
+        "low": optional("最低"),
+        "volume": optional("总手"),
+        "turnover": optional("金额"),
+        "volume_ratio": optional("量比"),
+        "change_percent": optional("涨幅"),
+        "turnover_rate": optional("换手"),
+        "bid": optional("buy_1"),
+        "ask": optional("sell_1"),
+        "source": SOURCE_NAME,
+        "source_url": quote_url(code),
+        "volume_unit": VOLUME_UNIT,
+        "amount_unit": AMOUNT_UNIT,
+    }
+
+
 # ── K 线：stock_zh_a_hist（日线）/ stock_zh_a_hist_min_em（5 分钟）────────────
 def _bar_payload(
     record: Record,
