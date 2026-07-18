@@ -1,6 +1,8 @@
 import { UNKNOWN_CAUSE_LABEL } from '@/lib/constants';
 import { formatDateTime } from '@/lib/format';
 import type { EvidenceDTO } from '@/lib/api/types';
+import { FileSearchOutlined } from '@ant-design/icons';
+import { Empty, List, Typography } from 'antd';
 
 export interface EvidenceListProps {
   evidence: EvidenceDTO[];
@@ -14,16 +16,14 @@ export interface EvidenceListProps {
 export function EvidenceList({ evidence }: EvidenceListProps) {
   if (evidence.length === 0) {
     return (
-      <p className="evidence-empty" data-testid="evidence-unknown">
-        {UNKNOWN_CAUSE_LABEL}
-      </p>
+      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={UNKNOWN_CAUSE_LABEL} className="evidence-empty" data-testid="evidence-unknown" />
     );
   }
 
   return (
-    <ul className="evidence" data-testid="evidence-list">
-      {evidence.map((item) => (
-        <li key={item.document_id} className="evidence__item" data-document-id={item.document_id}>
+    <List className="evidence" data-testid="evidence-list" dataSource={evidence} renderItem={(item) => (
+        <List.Item key={item.document_id} className="evidence__item" data-document-id={item.document_id}>
+          <List.Item.Meta avatar={<FileSearchOutlined />} title={
           <a
             className="evidence__link"
             href={item.source_url}
@@ -33,13 +33,13 @@ export function EvidenceList({ evidence }: EvidenceListProps) {
           >
             {item.title}
             <span className="sr-only">（将在新窗口打开）</span>
-          </a>
+          </a>} description={<>
           <blockquote className="evidence__quote" data-testid="evidence-quote">
             “{item.quote}”
           </blockquote>
-          <span className="evidence__meta">{formatDateTime(item.published_at)}</span>
-        </li>
-      ))}
-    </ul>
+          <Typography.Text type="secondary" className="evidence__meta">{formatDateTime(item.published_at)}</Typography.Text>
+          </>} />
+        </List.Item>
+      )} />
   );
 }

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Alert, Tag } from 'antd';
 
 import { STATE_DESCRIPTORS, type UiState } from '@/lib/ui-state';
 
@@ -15,20 +16,20 @@ export interface StateNoticeProps {
  */
 export function StateNotice({ state, detail, action }: StateNoticeProps) {
   const descriptor = STATE_DESCRIPTORS[state];
+  const type = descriptor.tone === 'danger' ? 'error' : descriptor.tone === 'warning' ? 'warning' : 'info';
 
   return (
-    <div
+    <Alert
       className={`notice notice--${descriptor.tone}`}
       data-state={state}
       data-testid={`state-${state}`}
       role={descriptor.tone === 'danger' ? 'alert' : 'status'}
-    >
-      <div className="notice__body">
-        <strong className="notice__label">{descriptor.label}</strong>
-        <span className="notice__detail">{detail ?? descriptor.description}</span>
-      </div>
-      {action ? <div className="notice__action">{action}</div> : null}
-    </div>
+      type={type}
+      showIcon
+      title={<strong className="notice__label">{descriptor.label}</strong>}
+      description={<span className="notice__detail">{detail ?? descriptor.description}</span>}
+      action={action}
+    />
   );
 }
 
@@ -40,14 +41,12 @@ export interface StateBadgeProps {
 export function StateBadge({ state, title }: StateBadgeProps) {
   const descriptor = STATE_DESCRIPTORS[state];
   return (
-    <span
+    <Tag
       className={`badge badge--${descriptor.tone}`}
       data-state={state}
       data-testid={`badge-${state}`}
       title={title ?? descriptor.description}
-    >
-      {descriptor.label}
-    </span>
+    >{descriptor.label}</Tag>
   );
 }
 

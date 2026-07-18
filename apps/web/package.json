@@ -14,7 +14,10 @@
     "e2e:server": "next build && next start -p 3100"
   },
   "dependencies": {
-    "echarts": "5.6.0",
+    "@ant-design/icons": "^6.3.2",
+    "@ant-design/nextjs-registry": "^1.3.0",
+    "antd": "^6.5.1",
+    "echarts": "6.1.0",
     "next": "15.5.20",
     "react": "19.1.0",
     "react-dom": "19.1.0"
@@ -33,6 +36,6 @@
     "eslint-config-next": "15.5.20",
     "jsdom": "26.1.0",
     "typescript": "5.8.3",
-    "vitest": "3.1.2"
+    "vitest": "3.2.6"
   }
 }

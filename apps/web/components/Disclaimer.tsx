@@ -1,4 +1,5 @@
 import { RESEARCH_ONLY_DISCLAIMER } from '@/lib/constants';
+import { Alert } from 'antd';
 
 /**
  * spec §13.2：任何预测区域都必须显示"仅供研究，不构成投资建议"。
@@ -6,8 +7,6 @@ import { RESEARCH_ONLY_DISCLAIMER } from '@/lib/constants';
  */
 export function Disclaimer() {
   return (
-    <p className="disclaimer" data-testid="disclaimer" role="note">
-      {RESEARCH_ONLY_DISCLAIMER}
-    </p>
+    <Alert className="disclaimer" data-testid="disclaimer" type="warning" showIcon title={RESEARCH_ONLY_DISCLAIMER} role="note" />
   );
 }

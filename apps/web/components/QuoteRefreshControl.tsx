@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { ReloadOutlined } from '@ant-design/icons';
+import { Alert, Button, Space, Typography } from 'antd';
 
 import { getJob, getSnapshot, refreshQuote } from '@/lib/api/endpoints';
 import type { JobDTO, MarketDTO, QuoteDTO } from '@/lib/api/types';
@@ -140,26 +142,24 @@ export function QuoteRefreshControl({
 
   return (
     <div className="quote-refresh" data-testid="quote-refresh" aria-live="polite">
-      <button
-        type="button"
-        className="btn btn--primary"
+      <Space wrap align="center">
+      <Button
+        type="primary"
+        icon={<ReloadOutlined />}
         onClick={handleRefresh}
         disabled={disabled}
+        loading={busy}
         data-testid="quote-refresh-button"
       >
         {buttonLabel}
-      </button>
-      <span className="quote-refresh__estimate">预计约 5–15 秒，高峰期可能需要 30 秒</span>
+      </Button>
+      <Typography.Text type="secondary" className="quote-refresh__estimate">预计约 5–15 秒，高峰期可能需要 30 秒</Typography.Text>
+      </Space>
       {state === 'succeeded' ? (
-        <p className="quote-refresh__success" data-testid="quote-refresh-success">
-          {message}
-        </p>
+        <Alert type="success" showIcon title={message} data-testid="quote-refresh-success" />
       ) : null}
       {state === 'failed' || state === 'timeout' ? (
-        <p className="quote-refresh__error" data-testid="quote-refresh-error">
-          {sourceName}获取失败（{formatDateTime(job?.finished_at ?? new Date().toISOString())}）：
-          {message} 历史行情不受影响。
-        </p>
+        <Alert type="error" showIcon data-testid="quote-refresh-error" title={`${sourceName}获取失败`} description={`${formatDateTime(job?.finished_at ?? new Date().toISOString())}：${message} 历史行情不受影响。`} />
       ) : null}
     </div>
   );

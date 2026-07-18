@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { Suspense, use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { ReloadOutlined } from '@ant-design/icons';
+import { Button } from 'antd';
 
 import { AnalogsPanel } from '@/components/AnalogsPanel';
 import { AnalysisCard } from '@/components/AnalysisCard';
@@ -321,13 +323,13 @@ function StockResearchContent({ symbol }: { symbol: string }) {
 
   const analysisBusy = isJobRunning(analysisMonitor.job);
   const analysisAction = (
-    <button type="button" className="btn btn--ghost" onClick={handleRefreshAnalyses} disabled={analysisBusy} data-testid="analysis-refresh">
+    <Button icon={<ReloadOutlined />} onClick={handleRefreshAnalyses} disabled={analysisBusy} loading={analysisBusy} data-testid="analysis-refresh">
       {analysisBusy
         ? analysisMonitor.job?.status === 'queued'
           ? '分析排队中…'
           : '正在更新分析…'
         : '生成或更新分析'}
-    </button>
+    </Button>
   );
 
   return (
@@ -368,7 +370,7 @@ function StockResearchContent({ symbol }: { symbol: string }) {
           partial_data: snapshotData?.missing?.length ? `以下数据未取得：${snapshotData.missing.join('、')}。` : undefined,
         }}
         actions={{
-          provider_failed: snapshot.error ? <button type="button" className="btn" onClick={snapshot.reload}>重试股票概览</button> : undefined,
+          provider_failed: snapshot.error ? <Button onClick={snapshot.reload}>重试股票概览</Button> : undefined,
         }}
       />
 
@@ -376,7 +378,7 @@ function StockResearchContent({ symbol }: { symbol: string }) {
       {backfillMonitor.error ? <StateNotice state="provider_failed" detail={`回补进度更新失败：${errorMessage(backfillMonitor.error)}；系统将在2秒后重试。`} /> : null}
       {backfillSubmitError ? <StateNotice state="provider_failed" detail={`无法重新发起回补：${errorMessage(backfillSubmitError)}`} /> : null}
       {backfillMonitor.job ? (
-        <Section id="backfill" title="首次数据回补" subtitle="进度会自动更新，完成后各区块会重新读取。" action={backfillMonitor.job.status === 'failed' ? <button type="button" className="btn" onClick={handleRetryBackfill}>重新发起回补</button> : null}>
+        <Section id="backfill" title="首次数据回补" subtitle="进度会自动更新，完成后各区块会重新读取。" action={backfillMonitor.job.status === 'failed' ? <Button icon={<ReloadOutlined />} onClick={handleRetryBackfill}>重新发起回补</Button> : null}>
           <BackfillProgress job={backfillMonitor.job} />
         </Section>
       ) : null}
@@ -387,6 +389,7 @@ function StockResearchContent({ symbol }: { symbol: string }) {
       <span id="overview" className="anchor-target" />
 
       <Section id="history" order={1} title="历史行情" subtitle="历史收盘价格与当前报价独立；可先看结论，再阅读走势图。">
+        {dailyBars.loading && minuteBars.loading ? null : <span className="sr-only">正在加载历史行情</span>}
         {dailyBars.loading && minuteBars.loading ? (
           <ResourceLoading label="历史行情" />
         ) : (
@@ -399,7 +402,7 @@ function StockResearchContent({ symbol }: { symbol: string }) {
             minuteMessage={minuteBars.error ? `5分钟线读取失败：${errorMessage(minuteBars.error)}` : null}
           />
         )}
-        {dailyBars.error || minuteBars.error ? <button type="button" className="btn btn--ghost" onClick={() => { dailyBars.reload(); minuteBars.reload(); }}>重试历史行情</button> : null}
+        {dailyBars.error || minuteBars.error ? <Button icon={<ReloadOutlined />} onClick={() => { dailyBars.reload(); minuteBars.reload(); }}>重试历史行情</Button> : null}
       </Section>
 
       <Section id="anomaly" order={2} title="异动与事件摘要" subtitle="先给出量价事实，再检索可验证事件证据。" action={analysisAction}>
@@ -409,7 +412,7 @@ function StockResearchContent({ symbol }: { symbol: string }) {
         {anomalies.loading && !anomalies.loaded ? (
           <ResourceLoading label="异动分析" />
         ) : anomalies.error ? (
-          <StateNotice state="provider_failed" detail={`异动分析读取失败：${errorMessage(anomalies.error)}`} action={<button type="button" className="btn" onClick={anomalies.reload}>重试</button>} />
+          <StateNotice state="provider_failed" detail={`异动分析读取失败：${errorMessage(anomalies.error)}`} action={<Button onClick={anomalies.reload}>重试</Button>} />
         ) : (anomalies.data ?? []).length === 0 ? (
           <EmptyHint><span data-testid="anomaly-empty">截至当前，未检测到符合规则的异动事件。</span></EmptyHint>
         ) : (
@@ -431,7 +434,7 @@ function StockResearchContent({ symbol }: { symbol: string }) {
                 stateDetail={resource.error ? errorMessage(resource.error) : resource.data?.job ? '历史数据回补完成前不生成预测。' : '当前尚未生成该周期预测。'}
                 scorecard={prediction ? scorecardByModel.get(prediction.model.key) ?? null : null}
               />
-              {resource.error ? <button type="button" className="btn btn--ghost" onClick={resource.reload}>重试{horizon === 'today_close' ? '今日收盘' : '未来5日'}预测</button> : null}
+              {resource.error ? <Button onClick={resource.reload}>重试{horizon === 'today_close' ? '今日收盘' : '未来5日'}预测</Button> : null}
             </div>
           );
         })}
@@ -441,10 +444,10 @@ function StockResearchContent({ symbol }: { symbol: string }) {
         {documents.loading && !documents.loaded ? (
           <ResourceLoading label="公告与新闻" />
         ) : documents.error ? (
-          <StateNotice state="provider_failed" detail={`公告与新闻读取失败：${errorMessage(documents.error)}`} action={<button type="button" className="btn" onClick={documents.reload}>重试</button>} />
+          <StateNotice state="provider_failed" detail={`公告与新闻读取失败：${errorMessage(documents.error)}`} action={<Button onClick={documents.reload}>重试</Button>} />
         ) : (
           <>
-            {documentAnalyses.error ? <StateNotice state="provider_failed" detail={`文档已取得，但分析摘要读取失败：${errorMessage(documentAnalyses.error)}`} action={<button type="button" className="btn" onClick={documentAnalyses.reload}>重试摘要</button>} /> : null}
+            {documentAnalyses.error ? <StateNotice state="provider_failed" detail={`文档已取得，但分析摘要读取失败：${errorMessage(documentAnalyses.error)}`} action={<Button onClick={documentAnalyses.reload}>重试摘要</Button>} /> : null}
             {documentAnalyses.loading && !documentAnalyses.loaded ? <p className="empty-hint" role="status">文档已取得，分析摘要正在读取…</p> : null}
             <DocumentsPanel documents={documents.data ?? []} analyses={documentAnalyses.data ?? []} />
           </>
@@ -455,7 +458,7 @@ function StockResearchContent({ symbol }: { symbol: string }) {
         {analogs.loading && !analogs.loaded ? (
           <ResourceLoading label="历史相似行情" />
         ) : analogs.error && !isInsufficientData(analogs.error) ? (
-          <StateNotice state="provider_failed" detail={`历史相似行情读取失败：${errorMessage(analogs.error)}`} action={<button type="button" className="btn" onClick={analogs.reload}>重试</button>} />
+          <StateNotice state="provider_failed" detail={`历史相似行情读取失败：${errorMessage(analogs.error)}`} action={<Button onClick={analogs.reload}>重试</Button>} />
         ) : (
           <AnalogsPanel analogs={analogs.data ?? []} insufficient={isInsufficientData(analogs.error)} insufficientMessage={analogs.error ? errorMessage(analogs.error) : undefined} />
         )}
@@ -470,7 +473,7 @@ function StockResearchContent({ symbol }: { symbol: string }) {
         {scorecards.loading && !scorecards.loaded ? (
           <ResourceLoading label="模型验证" />
         ) : scorecards.error ? (
-          <StateNotice state="provider_failed" detail={`模型验证读取失败：${errorMessage(scorecards.error)}`} action={<button type="button" className="btn" onClick={scorecards.reload}>重试</button>} />
+          <StateNotice state="provider_failed" detail={`模型验证读取失败：${errorMessage(scorecards.error)}`} action={<Button onClick={scorecards.reload}>重试</Button>} />
         ) : (scorecards.data ?? []).length === 0 ? (
           <EmptyHint><span data-testid="scorecard-empty">当前预测尚无可用的滚动验证成绩。</span></EmptyHint>
         ) : (

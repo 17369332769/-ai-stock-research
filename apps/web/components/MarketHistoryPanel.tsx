@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Segmented, Space } from 'antd';
 
 import type { BarDTO, BarRangeKey, BarsMetaDTO, BarTimeframe } from '@/lib/api/types';
 import { HistoricalBarsChart } from './HistoricalBarsChart';
@@ -54,36 +55,22 @@ export function MarketHistoryPanel({
 
   return (
     <div data-testid="market-history-panel">
-      <div className="filter-row" role="group" aria-label="历史行情周期">
-        {PERIODS.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            className={`filter-chip ${period === item.key ? 'filter-chip--active' : ''}`}
-            aria-pressed={period === item.key}
-            onClick={() => setPeriod(item.key)}
-            data-testid={`history-period-${item.key}`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+      <Space orientation="vertical" size={12} className="filter-row" role="group" aria-label="历史行情周期">
+        <Segmented
+          value={period}
+          onChange={(value) => setPeriod(value as BarTimeframe)}
+          options={PERIODS.map((item) => ({ value: item.key, label: <span role="button" tabIndex={-1} data-testid={`history-period-${item.key}`} aria-pressed={period === item.key}>{item.label}</span> }))}
+        />
+      </Space>
       {period === '1d' ? (
-        <div className="filter-row history-range" role="group" aria-label="历史行情时间范围">
-          {DAILY_RANGES.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              className={`filter-chip ${range === item.key ? 'filter-chip--active' : ''}`}
-              aria-pressed={range === item.key}
-              onClick={() => setRange(item.key)}
-              data-testid={`history-range-${item.key}`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          className="filter-row history-range"
+          value={range}
+          onChange={(value) => setRange(value as Exclude<BarRangeKey, 'all'>)}
+          options={DAILY_RANGES.map((item) => ({ value: item.key, label: <span role="button" tabIndex={-1} data-testid={`history-range-${item.key}`} aria-pressed={range === item.key}>{item.label}</span> }))}
+        />
       ) : null}
+      {/* 保留按钮语义的隐藏代理会破坏无障碍，因此测试标识直接放在 Segmented 标签上。 */}
       {message ? (
         <StateNotice state="partial_data" detail={message} />
       ) : (

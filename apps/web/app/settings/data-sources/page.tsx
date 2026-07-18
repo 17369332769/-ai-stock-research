@@ -1,5 +1,8 @@
 'use client';
 
+import { DatabaseOutlined, ReloadOutlined, RobotOutlined } from '@ant-design/icons';
+import { Button, Card, Descriptions, Space, Tag, Typography } from 'antd';
+
 import { Section } from '@/components/Section';
 import { SourceDisplay } from '@/components/SourceDisplay';
 import { StateNotice } from '@/components/StateNotice';
@@ -12,16 +15,11 @@ import { mapErrorToState } from '@/lib/ui-state';
 import type { DataSourceStatus, ModelConnectionStatus } from '@/lib/api/types';
 
 const SOURCE_TONE: Record<DataSourceStatus, string> = {
-  ok: 'badge--ok',
-  pending: 'badge--neutral',
-  degraded: 'badge--warning',
-  failed: 'badge--danger',
+  ok: 'success', pending: 'default', degraded: 'warning', failed: 'error',
 };
 
 const MODEL_TONE: Record<ModelConnectionStatus, string> = {
-  active: 'badge--ok',
-  degraded: 'badge--warning',
-  unavailable: 'badge--danger',
+  active: 'success', degraded: 'warning', unavailable: 'error',
 };
 
 /**
@@ -40,10 +38,11 @@ export default function DataSourcesPage() {
 
   return (
     <div data-testid="data-sources-page">
-      <h1 className="page-title">系统状态</h1>
-      <p className="page-subtitle">
-        免费数据源不保证交易所级实时性。数据源连续失败后进入降级状态，此处展示具体失败源与最后成功时间。
-      </p>
+      <div className="page-heading"><div>
+        <Typography.Text className="page-kicker">运行透明度</Typography.Text>
+        <Typography.Title className="page-title">系统状态</Typography.Title>
+        <Typography.Paragraph className="page-subtitle">免费数据源不保证交易所级实时性。数据源连续失败后进入降级状态，此处展示具体失败源与最后成功时间。</Typography.Paragraph>
+      </div></div>
 
       {failedSources.length > 0 ? (
         <StateNotice
@@ -67,9 +66,7 @@ export default function DataSourcesPage() {
         id="data-sources"
         title="数据源"
         action={
-          <button type="button" className="btn" onClick={reload} data-testid="status-refresh">
-            刷新
-          </button>
+          <Button icon={<ReloadOutlined />} onClick={reload} loading={loading} data-testid="status-refresh">刷新</Button>
         }
       >
         {loading && !loaded ? (
@@ -84,53 +81,26 @@ export default function DataSourcesPage() {
         ) : (
           <div className="status-grid" data-testid="data-source-list">
             {sources.map((source) => (
-              <article
+              <Card
                 key={source.key}
                 className="status-card"
                 data-testid="data-source-card"
                 data-source-key={source.key}
                 data-status={source.status}
+                title={<Space><DatabaseOutlined /><span className="status-card__name">{source.name}</span></Space>}
+                extra={<Tag color={SOURCE_TONE[source.status]} data-testid="source-status">{DATA_SOURCE_STATUS_LABELS[source.status]}</Tag>}
               >
-                <div className="status-card__head">
-                  <span className="status-card__name">{source.name}</span>
-                  <span className={`badge ${SOURCE_TONE[source.status]}`} data-testid="source-status">
-                    {DATA_SOURCE_STATUS_LABELS[source.status]}
-                  </span>
-                </div>
-                <dl>
-                  <dt>实际来源</dt>
-                  <dd data-testid="source-active-source">
-                    <SourceDisplay source={source.active_source} />
-                  </dd>
-                  <dt>数据覆盖</dt>
-                  <dd data-testid="source-coverage">
-                    {source.coverage}/{source.total}
-                  </dd>
-                  <dt>最后成功时间</dt>
-                  <dd data-testid="source-last-success">{formatDateTime(source.last_success_at)}</dd>
-                  <dt>下次运行</dt>
-                  <dd data-testid="source-next-run">{formatDateTime(source.next_run_at)}</dd>
-                  <dt>采集作业</dt>
-                  <dd>{source.job_count}</dd>
-                  <dt>连续失败次数</dt>
-                  <dd data-testid="source-failures">{source.consecutive_failures}</dd>
-                  {source.failing_jobs.length > 0 ? (
-                    <>
-                      <dt>异常作业</dt>
-                      <dd data-testid="source-failing-jobs">{source.failing_jobs.join('、')}</dd>
-                    </>
-                  ) : null}
-                  {source.last_error_code ? (
-                    <>
-                      <dt>失败原因</dt>
-                      <dd data-testid="source-error">
-                        {source.last_error_code}
-                        {source.last_error_message ? `：${source.last_error_message}` : ''}
-                      </dd>
-                    </>
-                  ) : null}
-                </dl>
-              </article>
+                <Descriptions size="small" column={1} items={[
+                  { key: 'source', label: '实际来源', children: <span data-testid="source-active-source"><SourceDisplay source={source.active_source} /></span> },
+                  { key: 'coverage', label: '数据覆盖', children: <span data-testid="source-coverage">{source.coverage}/{source.total}</span> },
+                  { key: 'success', label: '最后成功时间', children: <span data-testid="source-last-success">{formatDateTime(source.last_success_at)}</span> },
+                  { key: 'next', label: '下次运行', children: <span data-testid="source-next-run">{formatDateTime(source.next_run_at)}</span> },
+                  { key: 'jobs', label: '采集作业', children: source.job_count },
+                  { key: 'failures', label: '连续失败次数', children: <span data-testid="source-failures">{source.consecutive_failures}</span> },
+                  ...(source.failing_jobs.length > 0 ? [{ key: 'failing', label: '异常作业', children: <span data-testid="source-failing-jobs">{source.failing_jobs.join('、')}</span> }] : []),
+                  ...(source.last_error_code ? [{ key: 'error', label: '失败原因', children: <span data-testid="source-error">{source.last_error_code}{source.last_error_message ? `：${source.last_error_message}` : ''}</span> }] : []),
+                ]} />
+              </Card>
             ))}
           </div>
         )}
@@ -142,37 +112,21 @@ export default function DataSourcesPage() {
         ) : (
           <div className="status-grid" data-testid="model-list">
             {models.map((model) => (
-              <article
+              <Card
                 key={model.model_key}
                 className="status-card"
                 data-testid="model-card"
                 data-model-key={model.model_key}
                 data-status={model.status}
+                title={<Space><RobotOutlined /><span className="status-card__name">{model.model_key}</span></Space>}
+                extra={<Space><Tag color={MODEL_TONE[model.status]} data-testid="model-status">{MODEL_STATUS_LABELS[model.status]}</Tag>{model.better_than_baseline === false ? <Tag color="warning" data-testid="model-baseline-flag">未优于基准</Tag> : null}</Space>}
               >
-                <div className="status-card__head">
-                  <span className="status-card__name">{model.model_key}</span>
-                  <span className={`badge ${MODEL_TONE[model.status]}`} data-testid="model-status">
-                    {MODEL_STATUS_LABELS[model.status]}
-                  </span>
-                  {model.better_than_baseline === false ? (
-                    <span className="badge badge--warning" data-testid="model-baseline-flag">
-                      未优于基准
-                    </span>
-                  ) : null}
-                </div>
-                <dl>
-                  <dt>活跃版本</dt>
-                  <dd data-testid="model-version">{model.active_version ?? '—'}</dd>
-                  <dt>最近预测</dt>
-                  <dd>{formatDateTime(model.last_prediction_at)}</dd>
-                  {model.reason ? (
-                    <>
-                      <dt>说明</dt>
-                      <dd data-testid="model-reason">{model.reason}</dd>
-                    </>
-                  ) : null}
-                </dl>
-              </article>
+                <Descriptions size="small" column={1} items={[
+                  { key: 'version', label: '活跃版本', children: <span data-testid="model-version">{model.active_version ?? '—'}</span> },
+                  { key: 'prediction', label: '最近预测', children: formatDateTime(model.last_prediction_at) },
+                  ...(model.reason ? [{ key: 'reason', label: '说明', children: <span data-testid="model-reason">{model.reason}</span> }] : []),
+                ]} />
+              </Card>
             ))}
           </div>
         )}
@@ -182,26 +136,9 @@ export default function DataSourcesPage() {
         {!agent ? (
           <p className="empty-hint">暂无 Agent 记录。</p>
         ) : (
-          <div className="status-card" data-testid="agent-card" data-status={agent.status}>
-            <div className="status-card__head">
-              <span className="status-card__name">
-                {agent.provider ?? '未配置供应商'} / {agent.model_name ?? '未配置模型'}
-              </span>
-              <span className={`badge ${MODEL_TONE[agent.status]}`} data-testid="agent-status">
-                {MODEL_STATUS_LABELS[agent.status]}
-              </span>
-            </div>
-            <dl>
-              <dt>最后成功时间</dt>
-              <dd>{formatDateTime(agent.last_success_at)}</dd>
-              {agent.reason ? (
-                <>
-                  <dt>说明</dt>
-                  <dd>{agent.reason}</dd>
-                </>
-              ) : null}
-            </dl>
-          </div>
+          <Card className="status-card" data-testid="agent-card" data-status={agent.status} title={<Space><RobotOutlined />{agent.provider ?? '未配置供应商'} / {agent.model_name ?? '未配置模型'}</Space>} extra={<Tag color={MODEL_TONE[agent.status]} data-testid="agent-status">{MODEL_STATUS_LABELS[agent.status]}</Tag>}>
+            <Descriptions size="small" column={1} items={[{ key: 'success', label: '最后成功时间', children: formatDateTime(agent.last_success_at) }, ...(agent.reason ? [{ key: 'reason', label: '说明', children: agent.reason }] : [])]} />
+          </Card>
         )}
       </Section>
     </div>

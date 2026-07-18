@@ -17,6 +17,8 @@ from datetime import date, datetime
 from types import ModuleType
 from typing import Any, cast
 
+import httpx
+
 from .constants import (
     ALLOWED_ADJUSTMENTS,
     DEFAULT_ADJUSTMENT,
@@ -53,6 +55,26 @@ _spot_inflight: asyncio.Task[tuple[dict[str, Any], ...]] | None = None
 # 某一只失败不会污染其他股票的成功结果。
 QUOTE_CACHE_TTL_SECONDS = 12.0
 QUOTE_MAX_CONCURRENCY = 8
+AKSHARE_QUOTE_TIMEOUT_SECONDS = 15.0
+EASTMONEY_DELAY_QUOTE_URL = "https://push2delay.eastmoney.com/api/qt/stock/get"
+EASTMONEY_QUOTE_TIMEOUT_SECONDS = 15.0
+_EASTMONEY_QUOTE_FIELDS: dict[str, str] = {
+    "f43": "最新",
+    "f44": "最高",
+    "f45": "最低",
+    "f46": "今开",
+    "f47": "总手",
+    "f48": "金额",
+    "f50": "量比",
+    "f60": "昨收",
+    "f71": "均价",
+    "f161": "内盘",
+    "f168": "换手",
+    "f169": "涨跌",
+    "f170": "涨幅",
+    "f19": "buy_1",
+    "f39": "sell_1",
+}
 _quote_cache: dict[str, tuple[float, tuple[dict[str, Any], ...]]] = {}
 _quote_inflight: dict[str, asyncio.Task[tuple[dict[str, Any], ...]]] = {}
 _quote_lock = asyncio.Lock()
@@ -214,8 +236,74 @@ async def fetch_bid_ask(symbol: str) -> list[dict[str, Any]]:
 
 
 async def _load_bid_ask(symbol: str) -> tuple[dict[str, Any], ...]:
-    rows = await acall_akshare("stock_bid_ask_em", symbol=symbol)
+    try:
+        rows = await asyncio.wait_for(
+            acall_akshare("stock_bid_ask_em", symbol=symbol),
+            timeout=AKSHARE_QUOTE_TIMEOUT_SECONDS,
+        )
+    except TimeoutError:
+        primary_error = ProviderUpstreamError(
+            f"akshare.stock_bid_ask_em 超过 {AKSHARE_QUOTE_TIMEOUT_SECONDS:g}s 未返回"
+        )
+        rows = await _fallback_delay_quote(symbol, primary_error)
+    except ProviderUpstreamError as primary_error:
+        rows = await _fallback_delay_quote(symbol, primary_error)
     return tuple(dict(row) for row in rows)
+
+
+async def _fallback_delay_quote(
+    symbol: str, primary_error: ProviderUpstreamError
+) -> list[dict[str, Any]]:
+    # akshare 1.18.64 固定访问 push2.eastmoney.com；该主机偶尔会直接断开连接，
+    # 但东方财富的同源延迟行情主机仍可用。只在主调用失败时按代码请求同一组字段，
+    # 不切换数据供应商、不下载全市场，也不把失败静默伪装成空结果。
+    try:
+        return await _fetch_eastmoney_delay_quote(symbol)
+    except ProviderUpstreamError as fallback_error:
+        raise ProviderUpstreamError(
+            f"akshare.stock_bid_ask_em 与东方财富延迟行情均失败："
+            f"primary={primary_error}; fallback={fallback_error}"
+        ) from fallback_error
+
+
+async def _fetch_eastmoney_delay_quote(symbol: str) -> list[dict[str, Any]]:
+    """按单股读取东方财富延迟行情，返回 ``stock_bid_ask_em`` 兼容的 item/value 行。"""
+    code = normalize_symbol(symbol)
+    market_code = 1 if code.startswith("6") else 0
+    params = {
+        "fltt": "2",
+        "invt": "2",
+        "fields": ",".join(_EASTMONEY_QUOTE_FIELDS),
+        "secid": f"{market_code}.{code}",
+    }
+    headers = {
+        "User-Agent": "Mozilla/5.0 (compatible; ai-stock-research/0.1)",
+        "Referer": "https://quote.eastmoney.com/",
+    }
+    try:
+        async with httpx.AsyncClient(
+            timeout=EASTMONEY_QUOTE_TIMEOUT_SECONDS,
+            headers=headers,
+            follow_redirects=True,
+        ) as http:
+            response = await http.get(EASTMONEY_DELAY_QUOTE_URL, params=params)
+            response.raise_for_status()
+            payload = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise ProviderUpstreamError(f"东方财富延迟行情请求失败：{exc}") from exc
+
+    if not isinstance(payload, dict) or payload.get("rc") != 0:
+        raise ProviderUpstreamError("东方财富延迟行情返回了异常响应")
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        raise ProviderUpstreamError(f"东方财富延迟行情未返回股票 {code} 的数据")
+    missing = [field for field in ("f43", "f60") if data.get(field) is None]
+    if missing:
+        raise ProviderUpstreamError(f"东方财富延迟行情缺少必填字段：{missing}")
+    return [
+        {"item": item, "value": data.get(field)}
+        for field, item in _EASTMONEY_QUOTE_FIELDS.items()
+    ]
 
 
 async def fetch_quotes(symbols: list[str]) -> dict[str, list[dict[str, Any]]]:

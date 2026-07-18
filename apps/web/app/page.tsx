@@ -2,6 +2,17 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import {
+  BellOutlined,
+  FallOutlined,
+  FilterOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  RiseOutlined,
+  SearchOutlined,
+  WarningOutlined,
+} from '@ant-design/icons';
+import { Alert, Button, Collapse, Input, Select, Skeleton, Space, Tag, Typography } from 'antd';
 
 import { AddStockPanel } from '@/components/AddStockPanel';
 import { BackfillProgress } from '@/components/BackfillProgress';
@@ -365,22 +376,23 @@ function ResearchPoolPage() {
     <div data-testid="research-pool-page">
       <div className="page-heading">
         <div>
-          <h1 className="page-title">股票研究池</h1>
-          <p className="page-subtitle">沪深300由系统自动维护；你添加的范围外股票集中在“我的关注”。</p>
+          <Typography.Text className="page-kicker">市场研究工作台</Typography.Text>
+          <Typography.Title className="page-title">股票研究池</Typography.Title>
+          <Typography.Paragraph type="secondary" className="page-subtitle">沪深300由系统自动维护；你添加的范围外股票集中在“我的关注”。</Typography.Paragraph>
         </div>
-        <span className="market-summary">
+        <Tag color={market?.phase === 'morning' || market?.phase === 'afternoon' ? 'processing' : 'default'} className="market-summary">
           {market ? MARKET_PHASE_LABELS[market.phase] : '市场状态读取中'}
           {market?.latest_trading_day ? ` · 最近交易日 ${market.latest_trading_day}` : ''}
-        </span>
+        </Tag>
       </div>
 
       <section className="research-controls" aria-label="研究池范围、搜索与筛选">
         <nav className="scope-tabs" aria-label="研究池范围" data-testid="research-pool-tabs">
           {SCOPES.map((item) => (
-            <button
+            <Button
               key={item.key}
-              type="button"
-              className={`scope-tab ${scope === item.key ? 'scope-tab--active' : ''}`}
+              type={scope === item.key ? 'primary' : 'text'}
+              className="scope-tab"
               aria-pressed={scope === item.key}
               onClick={() =>
                 updateParams({
@@ -396,53 +408,53 @@ function ResearchPoolPage() {
               data-testid={`scope-${item.key}`}
             >
               {item.label}
-            </button>
+            </Button>
           ))}
         </nav>
 
         <div className="research-controls__primary">
           <label className="field research-search">
             <span className="field__label">搜索当前研究范围</span>
-            <input
-              className="field__input"
-              type="search"
+            <Input
+              size="large"
+              prefix={<SearchOutlined />}
               value={queryDraft}
               placeholder="输入代码或名称"
               onChange={(event) => setQueryDraft(event.target.value)}
               data-testid="watchlist-search"
+              allowClear
             />
           </label>
-          {queryDraft ? <button type="button" className="btn btn--ghost" onClick={() => setQueryDraft('')}>清除搜索</button> : null}
-          <details className="add-stock-disclosure">
-            <summary className="btn btn--primary">添加到我的关注</summary>
-            <div className="add-stock-disclosure__body">
-              <AddStockPanel
-                onAdd={handleAdd}
-                addError={addError}
-                adding={adding}
-                addedSymbol={feedback?.kind === 'success' && !feedback.canUndo ? feedback.symbol : null}
-                onResetError={() => setAddError(null)}
-              />
-            </div>
-          </details>
+          <Collapse
+            className="add-stock-disclosure"
+            items={[{
+              key: 'add',
+              label: <Space><PlusOutlined />添加到我的关注</Space>,
+              children: <AddStockPanel onAdd={handleAdd} addError={addError} adding={adding} addedSymbol={feedback?.kind === 'success' && !feedback.canUndo ? feedback.symbol : null} onResetError={() => setAddError(null)} />,
+            }]}
+          />
         </div>
 
-        <details className="research-filter-disclosure">
-          <summary className="btn btn--ghost">筛选与排序</summary>
-          <div className="research-filters">
-          <label className="field"><span className="field__label">涨跌</span><select className="field__select" value={direction} onChange={(event) => updateParams({ direction: event.target.value, page: null })}>{DIRECTIONS.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
-          <label className="field"><span className="field__label">行情</span><select className="field__select" value={quoteFilter} onChange={(event) => updateParams({ quote: event.target.value, page: null })}>{QUOTE_FILTERS.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
-          <label className="field"><span className="field__label">研究信号</span><select className="field__select" value={signal} onChange={(event) => updateParams({ signal: event.target.value, page: null })}>{SIGNAL_FILTERS.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
-          <label className="field"><span className="field__label">行业</span><select className="field__select" value={industry} onChange={(event) => updateParams({ industry: event.target.value, page: null })}><option value="">全部行业</option>{industries.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-          <label className="field"><span className="field__label">排序</span><select className="field__select" value={`${sortKey}:${sortDirection}`} onChange={(event) => { const [key, order] = event.target.value.split(':') as [ResearchPoolSortKey, SortDirection]; updateParams({ sort: key === 'display_order' ? null : key, order: key === 'display_order' ? null : order, page: null }); }}>{SORT_OPTIONS.map((item) => <option key={`${item.key}:${item.direction}`} value={`${item.key}:${item.direction}`}>{item.label}</option>)}</select></label>
-          <label className="field"><span className="field__label">每页</span><select className="field__select field__select--compact" value={pageSize} onChange={(event) => updateParams({ page_size: event.target.value, page: null })}>{[25, 50, 100].map((item) => <option key={item} value={item}>{item}只</option>)}</select></label>
-          </div>
-        </details>
+        <Collapse
+          className="research-filter-disclosure"
+          items={[{
+            key: 'filters',
+            label: <Space><FilterOutlined />筛选与排序</Space>,
+            children: <div className="research-filters">
+              <label className="field"><span className="field__label">涨跌</span><Select value={direction} onChange={(value) => updateParams({ direction: value, page: null })} options={DIRECTIONS.map((item) => ({ value: item.key, label: item.label }))} /></label>
+              <label className="field"><span className="field__label">行情</span><Select value={quoteFilter} onChange={(value) => updateParams({ quote: value, page: null })} options={QUOTE_FILTERS.map((item) => ({ value: item.key, label: item.label }))} /></label>
+              <label className="field"><span className="field__label">研究信号</span><Select value={signal} onChange={(value) => updateParams({ signal: value, page: null })} options={SIGNAL_FILTERS.map((item) => ({ value: item.key, label: item.label }))} /></label>
+              <label className="field"><span className="field__label">行业</span><Select value={industry} onChange={(value) => updateParams({ industry: value, page: null })} options={[{ value: '', label: '全部行业' }, ...industries.map((item) => ({ value: item, label: item }))]} /></label>
+              <label className="field"><span className="field__label">排序</span><Select value={`${sortKey}:${sortDirection}`} onChange={(value) => { const [key, order] = value.split(':') as [ResearchPoolSortKey, SortDirection]; updateParams({ sort: key === 'display_order' ? null : key, order: key === 'display_order' ? null : order, page: null }); }} options={SORT_OPTIONS.map((item) => ({ value: `${item.key}:${item.direction}`, label: item.label }))} /></label>
+              <label className="field"><span className="field__label">每页</span><Select value={pageSize} onChange={(value) => updateParams({ page_size: value, page: null })} options={[25, 50, 100].map((item) => ({ value: item, label: `${item}只` }))} /></label>
+            </div>,
+          }]}
+        />
 
         {activeFilters.length > 0 ? (
           <div className="active-filters" aria-label="已生效筛选">
-            {activeFilters.map((item) => <button key={item.key} type="button" className="filter-chip filter-chip--active" onClick={item.clear}>{item.label} ×</button>)}
-            <button type="button" className="btn btn--ghost" onClick={() => updateParams({ q: null, direction: null, quote: null, signal: null, industry: null, page: null })}>清除全部</button>
+            {activeFilters.map((item) => <Tag key={item.key} color="blue" closable onClose={item.clear}>{item.label}</Tag>)}
+            <Button type="link" onClick={() => updateParams({ q: null, direction: null, quote: null, signal: null, industry: null, page: null })}>清除全部</Button>
           </div>
         ) : null}
       </section>
@@ -457,20 +469,15 @@ function ResearchPoolPage() {
       />
 
       {feedback ? (
-        <div className={`action-toast action-toast--${feedback.kind}`} role={feedback.kind === 'error' ? 'alert' : 'status'} aria-live="polite">
-          <span>{feedback.message}</span>
-          {feedback.canUndo ? <button type="button" className="btn btn--ghost" onClick={handleUndoRemove} disabled={busySymbol === feedback.symbol}>撤销</button> : null}
-          {feedback.symbol && !feedback.canUndo ? <a className="btn btn--ghost" href={`/stocks/${feedback.symbol}?return_to=${encodeURIComponent(currentLocation)}`}>查看股票</a> : null}
-          <button type="button" className="btn btn--ghost" aria-label="关闭提示" onClick={() => setFeedback(null)}>关闭</button>
-        </div>
+        <Alert role={feedback.kind === 'error' ? 'alert' : 'status'} type={feedback.kind === 'error' ? 'error' : 'success'} showIcon closable onClose={() => setFeedback(null)} title={feedback.message} action={<Space>{feedback.canUndo ? <Button aria-label="撤销" size="small" onClick={handleUndoRemove} disabled={busySymbol === feedback.symbol}>撤销</Button> : null}{feedback.symbol && !feedback.canUndo ? <Button size="small" href={`/stocks/${feedback.symbol}?return_to=${encodeURIComponent(currentLocation)}`}>查看股票</Button> : null}</Space>} />
       ) : null}
 
       <div className="research-summary" data-testid="workbench-summary">
-        <button type="button" className={`summary-card ${direction === 'up' ? 'summary-card--active' : ''}`} onClick={() => updateParams({ direction: direction === 'up' ? null : 'up', page: null })}><span>上涨</span><strong>{risingCount}</strong></button>
-        <button type="button" className={`summary-card ${direction === 'down' ? 'summary-card--active' : ''}`} onClick={() => updateParams({ direction: direction === 'down' ? null : 'down', page: null })}><span>下跌</span><strong>{fallingCount}</strong></button>
-        <button type="button" className={`summary-card ${quoteFilter === 'abnormal' ? 'summary-card--active' : ''}`} onClick={() => updateParams({ quote: quoteFilter === 'abnormal' ? null : 'abnormal', page: null })}><span>行情异常</span><strong>{delayedItems.length + staleItems.length + unavailableItems.length}</strong><small>延迟 {delayedItems.length} · 过期 {staleItems.length} · 无 {unavailableItems.length}</small></button>
-        <button type="button" className={`summary-card ${signal === 'events' ? 'summary-card--active' : ''}`} onClick={() => updateParams({ signal: signal === 'events' ? null : 'events', page: null })}><span>事件股票</span><strong>{eventCount}</strong></button>
-        <button type="button" className={`summary-card ${signal === 'waiting' ? 'summary-card--active' : ''}`} onClick={() => updateParams({ signal: signal === 'waiting' ? null : 'waiting', page: null })}><span>待处理研究</span><strong>{waitingCount}</strong></button>
+        <Button className={`summary-card summary-card--up ${direction === 'up' ? 'summary-card--active' : ''}`} icon={<RiseOutlined />} onClick={() => updateParams({ direction: direction === 'up' ? null : 'up', page: null })}><span>上涨<strong>{risingCount}</strong><small>点击筛选上涨股票</small></span></Button>
+        <Button className={`summary-card summary-card--down ${direction === 'down' ? 'summary-card--active' : ''}`} icon={<FallOutlined />} onClick={() => updateParams({ direction: direction === 'down' ? null : 'down', page: null })}><span>下跌<strong>{fallingCount}</strong><small>点击筛选下跌股票</small></span></Button>
+        <Button className={`summary-card summary-card--alert ${quoteFilter === 'abnormal' ? 'summary-card--active' : ''}`} icon={<WarningOutlined />} onClick={() => updateParams({ quote: quoteFilter === 'abnormal' ? null : 'abnormal', page: null })}><span>行情异常<strong>{delayedItems.length + staleItems.length + unavailableItems.length}</strong><small>延迟 {delayedItems.length} · 过期 {staleItems.length} · 无 {unavailableItems.length}</small></span></Button>
+        <Button className={`summary-card summary-card--event ${signal === 'events' ? 'summary-card--active' : ''}`} icon={<BellOutlined />} onClick={() => updateParams({ signal: signal === 'events' ? null : 'events', page: null })}><span>事件股票<strong>{eventCount}</strong><small>公告或异动待研判</small></span></Button>
+        <Button className={`summary-card summary-card--pending ${signal === 'waiting' ? 'summary-card--active' : ''}`} icon={<ReloadOutlined />} onClick={() => updateParams({ signal: signal === 'waiting' ? null : 'waiting', page: null })}><span>待处理研究<strong>{waitingCount}</strong><small>排队、分析中或失败</small></span></Button>
       </div>
 
       {jobPollError ? <StateNotice state="provider_failed" detail={jobPollError} /> : null}
@@ -480,7 +487,7 @@ function ResearchPoolPage() {
             <div key={symbol} className="backfill-block">
               <h3 className="section__title">{symbol}</h3>
               <BackfillProgress job={job} />
-              {job.status === 'failed' ? <button type="button" className="btn" onClick={() => handleRetryBackfill(symbol)} disabled={busySymbol === symbol}>{busySymbol === symbol ? '正在重新发起…' : '重新发起回补'}</button> : null}
+              {job.status === 'failed' ? <Button icon={<ReloadOutlined />} onClick={() => handleRetryBackfill(symbol)} disabled={busySymbol === symbol} loading={busySymbol === symbol}>重新发起回补</Button> : null}
             </div>
           ))}
         </Section>
@@ -490,13 +497,13 @@ function ResearchPoolPage() {
         id="watchlist"
         title={`${scopeLabel}股票`}
         subtitle={`${filteredItems.length} 只符合结构化筛选；${query ? `继续按“${query}”匹配代码或名称。` : `最近行情获取于 ${formatDateTime(latestQuoteAt)}。`}`}
-        action={<button type="button" className="btn" onClick={reload} disabled={loading} data-testid="watchlist-refresh">{loading ? '正在读取…' : '重新读取列表'}</button>}
+        action={<Button icon={<ReloadOutlined />} onClick={reload} disabled={loading} loading={loading} data-testid="watchlist-refresh">重新读取列表</Button>}
       >
         <div aria-busy={loading}>
           {loading && !loaded ? (
-            <div className="skeleton-list" role="status"><span className="sr-only">正在加载{scopeLabel}股票</span>{Array.from({ length: 5 }, (_, index) => <div key={index} className="skeleton-row" />)}</div>
+            <div className="skeleton-list" role="status"><span className="sr-only">正在加载{scopeLabel}股票</span><Skeleton active paragraph={{ rows: 5 }} /></div>
           ) : error ? (
-            <StateNotice state={errorState ?? 'provider_failed'} detail={errorMessage(error)} action={<button type="button" className="btn" onClick={reload}>重试</button>} />
+            <StateNotice state={errorState ?? 'provider_failed'} detail={errorMessage(error)} action={<Button aria-label="重试" onClick={reload}>重试</Button>} />
           ) : (
             <WatchlistTable
               items={filteredItems}
@@ -519,24 +526,23 @@ function ResearchPoolPage() {
         </div>
       </Section>
 
-      <details className="system-summary">
-        <summary>
-          {systemStatus.loading && !systemStatus.loaded
+      <Collapse className="system-summary" items={[{
+        key: 'system',
+        label: systemStatus.loading && !systemStatus.loaded
             ? '系统状态：读取中'
             : systemStatus.error
               ? '系统状态：读取失败'
-              : `系统状态：数据源 ${healthySources}/${sources.length} 正常`}
-        </summary>
-        {systemStatus.error ? (
-          <StateNotice state="provider_failed" detail={errorMessage(systemStatus.error)} action={<button type="button" className="btn" onClick={systemStatus.reload}>重试</button>} />
+              : `系统状态：数据源 ${healthySources}/${sources.length} 正常`,
+        children: systemStatus.error ? (
+          <StateNotice state="provider_failed" detail={errorMessage(systemStatus.error)} action={<Button onClick={systemStatus.reload}>重试</Button>} />
         ) : (
           <p className="empty-hint">
             {sources.length === 0
               ? '正在读取数据源状态。'
               : sources.map((source) => `${source.name} ${DATA_SOURCE_STATUS_LABELS[source.status]}`).join(' · ')}
           </p>
-        )}
-      </details>
+        ),
+      }]} />
     </div>
   );
 }

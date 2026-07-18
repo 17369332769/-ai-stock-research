@@ -6,7 +6,8 @@
 #   * 迁移（migrate 服务）必须在 api / worker / web 启动前跑完；失败则新版本根本不启动（spec §19.1）。
 #   * 镜像用不可变标签 app-{git_sha}；GIT_SHA 为空时只能得到本机 dev 标签，
 #     scripts/release.sh 会直接拒绝发布（spec §19.1"没有提交SHA时发布脚本必须失败"）。
-#   * 模型产物 artifacts/models 只读挂载到 /models（spec §9.3.1 artifact_uri = file:///models/...）。
+#   * API / worker 只读挂载模型；显式 trainer 工具服务是唯一可写者
+#     （spec §9.3.1 artifact_uri = file:///models/...）。
 #   * 密钥只从环境变量 / ../.env 注入，不写进镜像、不写进数据库和日志（spec §14.3）。
 #
 # OpenBB 采用 AGPL-3.0：本 compose 只供本地个人使用，不得公开托管（spec §4.2）。
@@ -132,6 +133,7 @@ services:
     build:
       context: ..
       dockerfile: infra/Dockerfile.worker
+      target: runtime
     environment:
       MODEL_ARTIFACT_ROOT: /models
       WORKER_STATE_DIR: /state
@@ -156,6 +158,32 @@ services:
       timeout: 10s
       retries: 3
       start_period: 90s
+
+  # ── 显式训练/测试工具：不常驻、不监听端口，模型目录可写 ───────────────────────────
+  trainer:
+    <<: *python-common
+    profiles: ["tools"]
+    restart: "no"
+    image: "ai-stock-research/trainer:app-${GIT_SHA:-dev}"
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.worker
+      target: trainer
+    environment:
+      MODEL_ARTIFACT_ROOT: /models
+      PREDICTION_DATASET_ROOT: /datasets
+      WORKER_STATE_DIR: /state
+    volumes:
+      - ../artifacts/models:/models
+      - ../artifacts/datasets:/datasets
+      - worker_state:/state:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      openbb:
+        condition: service_healthy
 
   # ── Next.js（spec §4.1）─────────────────────────────────────────────────────────────
   web:

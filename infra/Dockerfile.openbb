@@ -49,13 +49,17 @@ COPY --from=builder /opt/venv /opt/venv
 
 WORKDIR /app
 COPY pyproject.toml ./
-COPY services ./services
+COPY services/__init__.py services/__init__.py
+COPY services/openbb_extensions services/openbb_extensions
 COPY apps/__init__.py apps/__init__.py
 COPY apps/api/__init__.py apps/api/__init__.py
 
+# 扩展源码和 entry point 均已就位后，以 root 生成静态资产；运行时无需写安装目录。
+RUN python -c 'import openbb; openbb.build()'
+
 USER app
 
-# 首次启动时把自定义扩展（akshare / cn_disclosure / csi300 Provider）编入 OpenBB 静态资产，
-# 然后拉起 OpenBB 官方 REST 应用。
+# 自定义扩展已在 builder 阶段编入 OpenBB 静态资产。运行时不再修改只读的 Python
+# 安装目录，避免非 root 用户因 .build.lock 无写权限而静默跳过扩展构建。
 EXPOSE 6900
-CMD ["sh", "-c", "python -c 'import openbb; openbb.build()' >/dev/null 2>&1 || true; exec uvicorn openbb_core.api.rest_api:app --host 0.0.0.0 --port 6900"]
+CMD ["uvicorn", "openbb_core.api.rest_api:app", "--host", "0.0.0.0", "--port", "6900"]

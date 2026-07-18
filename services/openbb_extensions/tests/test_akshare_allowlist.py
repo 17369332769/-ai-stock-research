@@ -10,7 +10,9 @@ import asyncio
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
+import httpx
 import pytest
+import respx
 
 from services.openbb_extensions.akshare_provider import client
 from services.openbb_extensions.akshare_provider.client import (
@@ -191,3 +193,87 @@ async def test_minute_upstream_failure_does_not_call_another_source(monkeypatch:
         )
 
     assert calls == ["stock_zh_a_hist_min_em"]
+
+
+@pytest.mark.asyncio
+async def test_quote_uses_same_source_delay_host_when_pinned_akshare_call_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    respx_mock: respx.MockRouter,
+) -> None:
+    async def fail(function_name: str, /, **kwargs: object) -> list[dict[str, object]]:
+        assert function_name == "stock_bid_ask_em"
+        raise ProviderUpstreamError("primary disconnected")
+
+    monkeypatch.setattr(client, "acall_akshare", fail)
+    route = respx_mock.get(client.EASTMONEY_DELAY_QUOTE_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "rc": 0,
+                "data": {
+                    "f43": 10.8,
+                    "f44": 10.9,
+                    "f45": 10.7,
+                    "f46": 10.75,
+                    "f47": 1234,
+                    "f48": 567890.0,
+                    "f50": 1.1,
+                    "f60": 10.6,
+                    "f71": 10.8,
+                    "f161": 500,
+                    "f168": 0.8,
+                    "f169": 0.2,
+                    "f170": 1.89,
+                    "f19": 10.79,
+                    "f39": 10.8,
+                },
+            },
+        )
+    )
+
+    rows = await client._load_bid_ask("000001")
+
+    assert route.called
+    values = {row["item"]: row["value"] for row in rows}
+    assert values["最新"] == 10.8
+    assert values["昨收"] == 10.6
+    assert values["buy_1"] == 10.79
+
+
+@pytest.mark.asyncio
+async def test_quote_fallback_fails_closed_on_missing_required_fields(
+    monkeypatch: pytest.MonkeyPatch,
+    respx_mock: respx.MockRouter,
+) -> None:
+    async def fail(function_name: str, /, **kwargs: object) -> list[dict[str, object]]:
+        raise ProviderUpstreamError("primary disconnected")
+
+    monkeypatch.setattr(client, "acall_akshare", fail)
+    respx_mock.get(client.EASTMONEY_DELAY_QUOTE_URL).mock(
+        return_value=httpx.Response(200, json={"rc": 0, "data": {"f43": 10.8}})
+    )
+
+    with pytest.raises(ProviderUpstreamError, match="均失败"):
+        await client._load_bid_ask("000001")
+
+
+@pytest.mark.asyncio
+async def test_quote_timeout_uses_bounded_same_source_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+    respx_mock: respx.MockRouter,
+) -> None:
+    async def hang(function_name: str, /, **kwargs: object) -> list[dict[str, object]]:
+        await asyncio.sleep(1)
+        return []
+
+    monkeypatch.setattr(client, "acall_akshare", hang)
+    monkeypatch.setattr(client, "AKSHARE_QUOTE_TIMEOUT_SECONDS", 0.01)
+    respx_mock.get(client.EASTMONEY_DELAY_QUOTE_URL).mock(
+        return_value=httpx.Response(200, json={"rc": 0, "data": {"f43": 10.8, "f60": 10.6}})
+    )
+
+    rows = await client._load_bid_ask("000001")
+
+    values = {row["item"]: row["value"] for row in rows}
+    assert values["最新"] == 10.8
+    assert values["昨收"] == 10.6

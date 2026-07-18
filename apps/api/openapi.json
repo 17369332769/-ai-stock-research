@@ -2970,6 +2970,44 @@
               ],
               "title": "Q"
             }
+          },
+          {
+            "description": "无填充 Base64URL 游标",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "无填充 Base64URL 游标",
+              "title": "Cursor"
+            }
+          },
+          {
+            "description": "默认 20，最大 100",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 100,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "默认 20，最大 100",
+              "title": "Limit"
+            }
           }
         ],
         "responses": {

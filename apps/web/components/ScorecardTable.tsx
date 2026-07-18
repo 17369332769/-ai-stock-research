@@ -1,6 +1,8 @@
 import { BETTER_THAN_BASELINE_LABEL, NOT_BETTER_THAN_BASELINE_LABEL } from '@/lib/constants';
 import { formatDateTime, formatMetric, formatProbability } from '@/lib/format';
 import type { ScorecardDTO } from '@/lib/api/types';
+import { BarChartOutlined } from '@ant-design/icons';
+import { Descriptions, Space, Table, Tag, Typography } from 'antd';
 
 export interface ScorecardTableProps {
   scorecard: ScorecardDTO;
@@ -21,75 +23,49 @@ export function ScorecardTable({ scorecard }: ScorecardTableProps) {
 
   return (
     <div className="scorecard" data-testid="scorecard" data-model-key={scorecard.model_key}>
-      <div className="scorecard__head">
-        <span className="scorecard__model" data-testid="scorecard-model-key">
+      <Space className="scorecard__head" wrap>
+        <Typography.Text strong className="scorecard__model" data-testid="scorecard-model-key">
+          <BarChartOutlined />{' '}
           {modelName(scorecard.model_key)}
-        </span>
-        <span
-          className={`badge ${better ? 'badge--ok' : 'badge--warning'}`}
+        </Typography.Text>
+        <Tag
+          color={better ? 'success' : 'warning'}
           data-testid="scorecard-baseline-flag"
           data-better-than-baseline={String(better)}
         >
           {better ? BETTER_THAN_BASELINE_LABEL : NOT_BETTER_THAN_BASELINE_LABEL}
-        </span>
-        <span className="scorecard__calculated" data-testid="scorecard-calculated-at">
+        </Tag>
+        <Typography.Text type="secondary" className="scorecard__calculated" data-testid="scorecard-calculated-at">
           统计时间 {formatDateTime(scorecard.calculated_at)}
-        </span>
-      </div>
+        </Typography.Text>
+      </Space>
       <details className="metric-help">
         <summary>查看模型技术信息</summary>
         <p>模型标识：<code>{scorecard.model_key}</code></p>
       </details>
 
-      <dl className="scorecard__counts">
-        <div>
-          <dt>可结算样本</dt>
-          <dd data-testid="scorecard-eligible-count">{scorecard.eligible_count}</dd>
-        </div>
-        <div>
-          <dt>已结算</dt>
-          <dd data-testid="scorecard-settled-count">{scorecard.settled_count}</dd>
-        </div>
-        <div>
-          <dt>待结算</dt>
-          <dd data-testid="scorecard-pending-count">{scorecard.pending_count}</dd>
-        </div>
-      </dl>
+      <Descriptions className="scorecard__counts" bordered size="small" column={3} items={[
+        { key: 'eligible', label: '可结算样本', children: <strong data-testid="scorecard-eligible-count">{scorecard.eligible_count}</strong> },
+        { key: 'settled', label: '已结算', children: <strong data-testid="scorecard-settled-count">{scorecard.settled_count}</strong> },
+        { key: 'pending', label: '待结算', children: <strong data-testid="scorecard-pending-count">{scorecard.pending_count}</strong> },
+      ]} />
 
-      <div className="table-scroll" tabIndex={0} role="region" aria-label={`${scorecard.model_key}模型与基准指标对比`}>
-        <table className="table" data-testid="scorecard-metrics">
-          <caption className="table__caption">模型与简单基准的滚动验证指标对比</caption>
-          <thead>
-            <tr>
-              <th scope="col">指标</th>
-              <th scope="col">模型</th>
-              <th scope="col">基准</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <th scope="row">方向命中率</th>
-              <td data-testid="scorecard-direction-accuracy">
-                {formatProbability(scorecard.direction_accuracy)}
-              </td>
-              <td data-testid="scorecard-baseline-direction-accuracy">
-                {formatProbability(scorecard.baseline_direction_accuracy)}
-              </td>
-            </tr>
-            <tr>
-              <th scope="row">MAE</th>
-              <td data-testid="scorecard-mae">{formatMetric(scorecard.mae)}</td>
-              <td data-testid="scorecard-baseline-mae">{formatMetric(scorecard.baseline_mae)}</td>
-            </tr>
-            <tr>
-              <th scope="row">Brier Score</th>
-              <td data-testid="scorecard-brier">{formatMetric(scorecard.brier_score)}</td>
-              <td data-testid="scorecard-baseline-brier">
-                {formatMetric(scorecard.baseline_brier_score)}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <div className="table-scroll" tabIndex={0} role="region" aria-label={`${scorecard.model_key}模型与基准指标对比`} data-testid="scorecard-metrics">
+        <Table
+          size="small"
+          pagination={false}
+          rowKey="metric"
+          columns={[
+            { title: '指标', dataIndex: 'metric', key: 'metric' },
+            { title: '模型', dataIndex: 'model', key: 'model' },
+            { title: '基准', dataIndex: 'baseline', key: 'baseline' },
+          ]}
+          dataSource={[
+            { metric: '方向命中率', model: <span data-testid="scorecard-direction-accuracy">{formatProbability(scorecard.direction_accuracy)}</span>, baseline: <span data-testid="scorecard-baseline-direction-accuracy">{formatProbability(scorecard.baseline_direction_accuracy)}</span> },
+            { metric: 'MAE', model: <span data-testid="scorecard-mae">{formatMetric(scorecard.mae)}</span>, baseline: <span data-testid="scorecard-baseline-mae">{formatMetric(scorecard.baseline_mae)}</span> },
+            { metric: 'Brier Score', model: <span data-testid="scorecard-brier">{formatMetric(scorecard.brier_score)}</span>, baseline: <span data-testid="scorecard-baseline-brier">{formatMetric(scorecard.baseline_brier_score)}</span> },
+          ]}
+        />
       </div>
       <details className="metric-help">
         <summary>这些指标是什么意思？</summary>

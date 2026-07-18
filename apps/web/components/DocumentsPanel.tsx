@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { FileTextOutlined } from '@ant-design/icons';
+import { Button, List, Pagination, Segmented, Space, Tag, Typography } from 'antd';
 
 import { DOCUMENT_TYPE_LABELS } from '@/lib/constants';
 import { formatDateTime } from '@/lib/format';
@@ -52,36 +54,19 @@ export function DocumentsPanel({ documents, analyses }: DocumentsPanelProps) {
 
   return (
     <div data-testid="documents-panel">
-      <div className="filter-row" role="group" aria-label="文档类型筛选">
-        {FILTERS.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            className={`filter-chip ${filter === item.key ? 'filter-chip--active' : ''}`}
-            aria-pressed={filter === item.key}
-            onClick={() => {
-              setFilter(item.key);
-              setPage(1);
-            }}
-            data-testid={`documents-filter-${item.key}`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+      <Segmented className="filter-row" value={filter} onChange={(value) => { setFilter(value as Filter); setPage(1); }} options={FILTERS.map((item) => ({ value: item.key, label: <span role="button" tabIndex={-1} data-testid={`documents-filter-${item.key}`} aria-pressed={filter === item.key}>{item.label}</span> }))} />
 
       {visible.length === 0 ? (
         <EmptyHint>该类型下暂无文档。</EmptyHint>
       ) : (
-        <ul className="documents" data-testid="documents-list">
-          {pageDocuments.map((doc) => {
+        <List className="documents" data-testid="documents-list" dataSource={pageDocuments} renderItem={(doc) => {
             const analysis = analysisByDocument.get(doc.id);
             return (
-              <li key={doc.id} className="documents__item" data-document-id={doc.id}>
+              <List.Item key={doc.id} className="documents__item" data-document-id={doc.id}>
                 <div className="documents__head">
-                  <span className="badge badge--neutral">
+                  <Tag icon={<FileTextOutlined />}>
                     {DOCUMENT_TYPE_LABELS[doc.document_type]}
-                  </span>
+                  </Tag>
                   <a
                     className="documents__title"
                     href={doc.source_url}
@@ -93,10 +78,7 @@ export function DocumentsPanel({ documents, analyses }: DocumentsPanelProps) {
                     <span className="sr-only">（将在新窗口打开）</span>
                   </a>
                 </div>
-                <div className="documents__meta">
-                  <span>{documentSourceName(doc.source)}</span>
-                  <span>{formatDateTime(doc.published_at)}</span>
-                </div>
+                <Space className="documents__meta"><Typography.Text type="secondary">{documentSourceName(doc.source)}</Typography.Text><Typography.Text type="secondary">{formatDateTime(doc.published_at)}</Typography.Text></Space>
                 {analysis ? (
                   <AnalysisCard analysis={analysis} />
                 ) : (
@@ -104,35 +86,31 @@ export function DocumentsPanel({ documents, analyses }: DocumentsPanelProps) {
                     尚未生成摘要。
                   </p>
                 )}
-              </li>
+              </List.Item>
             );
-          })}
-        </ul>
+          }} />
       )}
 
       {visible.length > PAGE_SIZE ? (
         <nav className="pagination" aria-label="公告新闻分页" data-testid="documents-pagination">
-          <button
-            type="button"
-            className="btn btn--ghost"
+          <Button
             onClick={() => setPage((current) => Math.max(1, current - 1))}
             disabled={currentPage === 1}
             data-testid="documents-page-prev"
           >
             上一页
-          </button>
+          </Button>
           <span data-testid="documents-page-indicator">
             第 {currentPage} 页，共 {totalPages} 页
           </span>
-          <button
-            type="button"
-            className="btn btn--ghost"
+          <Pagination current={currentPage} total={visible.length} pageSize={PAGE_SIZE} showSizeChanger={false} onChange={setPage} />
+          <Button
             onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
             disabled={currentPage === totalPages}
             data-testid="documents-page-next"
           >
             下一页
-          </button>
+          </Button>
         </nav>
       ) : null}
     </div>

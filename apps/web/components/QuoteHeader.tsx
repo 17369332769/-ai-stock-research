@@ -6,6 +6,8 @@ import { resolveQuoteStatus } from '@/lib/ui-state';
 import type { MarketDTO, QuoteDTO, RelativeStrengthDTO } from '@/lib/api/types';
 import { StateBadge } from './StateNotice';
 import { SourceDisplay } from './SourceDisplay';
+import { StockOutlined } from '@ant-design/icons';
+import { Card, Space, Tag, Typography } from 'antd';
 
 export interface QuoteHeaderProps {
   symbol: string;
@@ -41,36 +43,37 @@ export function QuoteHeader({
   const tone = changeTone(quote?.change_percent);
 
   return (
-    <header className="quote-header" data-testid="quote-header">
+    <Card className="quote-header" data-testid="quote-header">
+      <Typography.Text type="secondary" className="quote-header__eyebrow"><StockOutlined /> 股票研究概览</Typography.Text>
       <div className="quote-header__identity">
-        <h1 className="quote-header__name">
+        <Typography.Title className="quote-header__name">
           {name}
           <span className="quote-header__symbol">{symbol}</span>
-        </h1>
-        <div className="quote-header__badges">
+        </Typography.Title>
+        <Space wrap className="quote-header__badges">
           {market ? (
-            <span className="badge badge--neutral" data-testid="market-phase">
+            <Tag data-testid="market-phase">
               {MARKET_PHASE_LABELS[market.phase]}
-            </span>
+            </Tag>
           ) : null}
           {status.closed ? <StateBadge state="market_closed" /> : null}
           {status.stale ? <StateBadge state="quote_stale" /> : null}
           {status.delayed ? (
-            <span className="badge badge--warning" data-testid="badge-delayed">
+            <Tag color="warning" data-testid="badge-delayed">
               行情可能延迟
-            </span>
+            </Tag>
           ) : null}
           {status.isRealtime ? (
-            <span className="badge badge--ok" data-testid="badge-realtime">
+            <Tag color="success" data-testid="badge-realtime">
               实时
-            </span>
+            </Tag>
           ) : null}
           {exited ? (
-            <span className="badge badge--warning" data-testid="badge-universe-exited">
+            <Tag color="warning" data-testid="badge-universe-exited">
               已调出沪深300
-            </span>
+            </Tag>
           ) : null}
-        </div>
+        </Space>
       </div>
 
       {quote ? (
@@ -173,6 +176,6 @@ export function QuoteHeader({
         </div>
       )}
       {quote && refreshAction ? <div className="quote-header__refresh-action">{refreshAction}</div> : null}
-    </header>
+    </Card>
   );
 }

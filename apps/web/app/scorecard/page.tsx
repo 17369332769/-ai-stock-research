@@ -3,6 +3,8 @@
 import { Suspense, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { SearchOutlined } from '@ant-design/icons';
+import { Button, Input, Segmented, Select, Space, Typography } from 'antd';
 
 import { PredictionHistoryTable } from '@/components/PredictionHistoryTable';
 import { ScorecardTable } from '@/components/ScorecardTable';
@@ -79,30 +81,20 @@ function ScorecardContent() {
 
   return (
     <div data-testid="scorecard-page">
-      <h1 className="page-title">预测成绩单</h1>
-      <p className="page-subtitle">
-        每次预测永久保存并自动结算。未到目标时间的预测不进入分母。
-      </p>
+      <div className="page-heading">
+        <div>
+          <Typography.Text className="page-kicker">模型验证中心</Typography.Text>
+          <Typography.Title className="page-title">预测成绩单</Typography.Title>
+          <Typography.Paragraph className="page-subtitle">每次预测永久保存并自动结算。未到目标时间的预测不进入分母。</Typography.Paragraph>
+        </div>
+      </div>
 
       <Section
         id="model-scorecard"
         title="模型维度"
         subtitle="全部历史 / 最近100次 / 最近20次；含基准对照。"
         action={
-          <div className="filter-row" role="group" aria-label="统计窗口">
-            {WINDOWS.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                className={`filter-chip ${window === item.key ? 'filter-chip--active' : ''}`}
-                aria-pressed={window === item.key}
-                onClick={() => setWindow(item.key)}
-                data-testid={`window-${item.key}`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
+          <Segmented className="filter-row" value={window} onChange={(value) => setWindow(value as ScorecardWindow)} options={WINDOWS.map((item) => ({ value: item.key, label: <span role="button" tabIndex={-1} data-testid={`window-${item.key}`} aria-pressed={window === item.key}>{item.label}</span> }))} />
         }
       >
         {status.error ? (
@@ -123,9 +115,7 @@ function ScorecardContent() {
               <li>确认离线成绩优于基准后，将指定版本设为“启用”。</li>
               <li>只有已启用版本会生成正式预测并进入成绩单。</li>
             </ol>
-            <Link className="btn btn--ghost" href="/settings/data-sources">
-              查看数据与模型运行状态
-            </Link>
+            <Link href="/settings/data-sources"><Button>查看数据与模型运行状态</Button></Link>
           </div>
         ) : scorecards.loading && !scorecards.loaded ? (
           <p className="empty-hint">加载中…</p>
@@ -146,12 +136,11 @@ function ScorecardContent() {
         title="股票维度"
         subtitle="逐条预测、实际结果与误差；未结算的记录标注为待结算。"
         action={
-          <div className="toolbar">
+          <Space className="toolbar" wrap align="end">
             <label className="field">
               <span className="field__label">搜索研究池股票</span>
-              <input
-                className="field__input"
-                type="search"
+              <Input
+                prefix={<SearchOutlined />}
                 value={symbolSearch}
                 placeholder="名称或代码"
                 onChange={(event) => setSymbolSearch(event.target.value)}
@@ -160,45 +149,27 @@ function ScorecardContent() {
             </label>
             <label className="field">
               <span className="field__label">研究池股票</span>
-              <select
-                className="field__select"
+              <Select
                 value={activeSymbol}
-                onChange={(event) => {
-                  updateSelection(event.target.value, horizon);
-                }}
+                onChange={(value) => updateSelection(value, horizon)}
                 data-testid="scorecard-symbol-select"
-              >
-                {poolItems.length === 0 ? <option value="">研究池暂无股票</option> : null}
-                {selectItems.map((item) => (
-                  <option key={item.symbol} value={item.symbol}>
-                    {item.name ?? item.symbol}（{item.symbol}）
-                  </option>
-                ))}
-              </select>
+                options={poolItems.length === 0 ? [{ value: '', label: '研究池暂无股票' }] : selectItems.map((item) => ({ value: item.symbol, label: `${item.name ?? item.symbol}（${item.symbol}）` }))}
+              />
             </label>
             <label className="field">
               <span className="field__label">预测目标</span>
-              <select
-                className="field__select"
+              <Select
                 value={horizon}
-                onChange={(event) => {
-                  const value = event.target.value as PredictionHorizon;
-                  updateSelection(activeSymbol, value);
-                }}
+                onChange={(value) => updateSelection(activeSymbol, value as PredictionHorizon)}
                 data-testid="scorecard-horizon-select"
-              >
-                {HORIZONS.map((item) => (
-                  <option key={item} value={item}>
-                    {HORIZON_LABELS[item]}
-                  </option>
-                ))}
-              </select>
+                options={HORIZONS.map((item) => ({ value: item, label: HORIZON_LABELS[item] }))}
+              />
             </label>
-          </div>
+          </Space>
         }
       >
         {researchPool.error ? (
-          <StateNotice state={mapErrorToState(researchPool.error) ?? 'provider_failed'} detail={errorMessage(researchPool.error)} action={<button type="button" className="btn" onClick={researchPool.reload}>重试研究池</button>} />
+          <StateNotice state={mapErrorToState(researchPool.error) ?? 'provider_failed'} detail={errorMessage(researchPool.error)} action={<Button onClick={researchPool.reload}>重试研究池</Button>} />
         ) : researchPool.loading && !researchPool.loaded ? (
           <p className="empty-hint" role="status">正在读取研究池股票…</p>
         ) : !activeSymbol ? (
@@ -207,7 +178,7 @@ function ScorecardContent() {
           <StateNotice
             state={isInsufficientData(history.error) ? 'no_prediction' : mapErrorToState(history.error) ?? 'provider_failed'}
             detail={errorMessage(history.error)}
-            action={<button type="button" className="btn" onClick={history.reload}>重试预测记录</button>}
+            action={<Button onClick={history.reload}>重试预测记录</Button>}
           />
         ) : history.loading && !history.loaded ? (
           <p className="empty-hint">加载中…</p>

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Card, Empty, Space, Typography } from 'antd';
 
 export interface SectionProps {
   id: string;
@@ -13,18 +14,24 @@ export interface SectionProps {
 export function Section({ id, title, order, subtitle, action, children }: SectionProps) {
   return (
     <section className="section" id={id} data-section={id} data-order={order}>
-      <header className="section__header">
-        <div>
-          <h2 className="section__title">{title}</h2>
-          {subtitle ? <p className="section__subtitle">{subtitle}</p> : null}
-        </div>
-        {action ? <div className="section__action">{action}</div> : null}
-      </header>
-      <div className="section__body">{children}</div>
+      <Card
+        title={(
+          <Space align="start" size={12}>
+            {order ? <span className="section__order" aria-hidden="true">{String(order).padStart(2, '0')}</span> : null}
+            <span className="section__heading-copy">
+              <Typography.Title level={2} className="section__title">{title}</Typography.Title>
+              {subtitle ? <Typography.Text type="secondary" className="section__subtitle">{subtitle}</Typography.Text> : null}
+            </span>
+          </Space>
+        )}
+        extra={action}
+      >
+        <div className="section__body">{children}</div>
+      </Card>
     </section>
   );
 }
 
 export function EmptyHint({ children }: { children: ReactNode }) {
-  return <p className="empty-hint">{children}</p>;
+  return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={children} className="empty-hint" />;
 }

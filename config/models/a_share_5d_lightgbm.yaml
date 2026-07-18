@@ -11,7 +11,8 @@ feature_set_version: v1
 test_fraction: 0.20
 min_train_sessions: 250
 walk_forward_folds: 5
-validation_sessions: 60
+# 49 个交易日 × 5 折；5 日 embargo 后仍能保持五折验证窗口互不重叠。
+validation_sessions: 49
 
 lower_quantile: 0.20
 upper_quantile: 0.80

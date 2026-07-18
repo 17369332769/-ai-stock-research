@@ -11,8 +11,8 @@ entry point（见同目录 pyproject.toml）::
     GET /api/v1/equity/price/historical?provider=akshare&symbol=600519&interval=1d
     GET /api/v1/news/company?provider=akshare&symbol=600519
 
-⚠️ 本机 .venv 尚未装上 openbb==4.7.2，**entry point 注册未经实机验证**；
-详见 docs/data-sources.md「未验证事项」。
+容器构建会在扩展安装完成后执行 ``openbb.build()``；运行时已验证三个自定义
+Provider 均能以非 root 用户被 OpenBB 发现。
 """
 
 from __future__ import annotations

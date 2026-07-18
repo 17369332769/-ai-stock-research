@@ -6,7 +6,16 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Query, Response, status
 
-from apps.api.app.api.v1.deps import NowDep, RequestIdDep, SessionDep, SymbolPath
+from apps.api.app.api.v1.deps import (
+    CursorQuery,
+    LimitQuery,
+    NowDep,
+    RequestIdDep,
+    SessionDep,
+    SymbolPath,
+    resolve_cursor,
+    resolve_limit,
+)
 from apps.api.app.api.v1.errors_doc import error_responses
 from apps.api.app.schemas.common import ItemResponse, ListResponse, PageInfo
 from apps.api.app.schemas.quotes import QuoteDTO
@@ -28,11 +37,23 @@ async def get_research_pool(
     request_id: RequestIdDep,
     scope: Annotated[Literal["csi300", "extra", "all"], Query()] = "all",
     q: Annotated[str | None, Query(max_length=80)] = None,
+    cursor: CursorQuery = None,
+    limit: LimitQuery = None,
 ) -> ListResponse[WatchlistItemDTO]:
     rows = await research_pool_service.list_research_pool(session, now, scope=scope, query=q)
+    items, next_cursor, has_more = research_pool_service.paginate_research_pool(
+        rows,
+        limit=resolve_limit(limit),
+        cursor=resolve_cursor(
+            cursor, expected_sort=research_pool_service.RESEARCH_POOL_SORT_KEY
+        ),
+    )
     return ListResponse[WatchlistItemDTO](
-        data=rows,
-        page=PageInfo(next_cursor=None, has_more=False),
+        data=items,
+        page=PageInfo(
+            next_cursor=next_cursor.encode() if next_cursor else None,
+            has_more=has_more,
+        ),
         request_id=request_id,
     )
 

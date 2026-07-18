@@ -12,6 +12,8 @@ import type { PredictionDTO, PredictionHorizon, ScorecardDTO } from '@/lib/api/t
 import type { UiState } from '@/lib/ui-state';
 import { Disclaimer } from './Disclaimer';
 import { StateNotice } from './StateNotice';
+import { ExperimentOutlined } from '@ant-design/icons';
+import { Card, Tag, Typography } from 'antd';
 
 export interface PredictionPanelProps {
   horizon: PredictionHorizon;
@@ -43,11 +45,10 @@ export function PredictionPanel({
 
   if (!prediction) {
     return (
-      <div className="prediction" data-testid={`prediction-${horizon}`} data-horizon={horizon}>
-        <h3 className="prediction__title">{horizonLabel}预测</h3>
+      <Card className="prediction" data-testid={`prediction-${horizon}`} data-horizon={horizon} title={<><ExperimentOutlined /> {horizonLabel}预测</>}>
         <StateNotice state={state ?? 'no_prediction'} detail={stateDetail} />
         <Disclaimer />
-      </div>
+      </Card>
     );
   }
 
@@ -55,30 +56,29 @@ export function PredictionPanel({
   const betterThanBaseline = prediction.model.better_than_baseline;
 
   return (
-    <div className="prediction" data-testid={`prediction-${horizon}`} data-horizon={horizon}>
+    <Card className="prediction" data-testid={`prediction-${horizon}`} data-horizon={horizon} title={<><ExperimentOutlined /> {horizonLabel}预测</>}>
       <div className="prediction__head">
-        <h3 className="prediction__title">{horizonLabel}预测</h3>
-        <span
-          className={`badge ${betterThanBaseline ? 'badge--ok' : 'badge--warning'}`}
+        <Tag
+          color={betterThanBaseline ? 'success' : 'warning'}
           data-testid="baseline-flag"
           data-better-than-baseline={String(betterThanBaseline)}
         >
           {betterThanBaseline ? BETTER_THAN_BASELINE_LABEL : NOT_BETTER_THAN_BASELINE_LABEL}
-        </span>
-        <span
-          className={`badge badge--confidence-${confidence.label}`}
+        </Tag>
+        <Tag
+          color={confidence.label === 'high' ? 'success' : confidence.label === 'medium' ? 'processing' : 'warning'}
           data-testid="prediction-confidence"
           data-confidence={confidence.label}
           data-confidence-clamped={String(confidence.clamped)}
         >
           置信度：{CONFIDENCE_LABELS[confidence.label]}
-        </span>
+        </Tag>
       </div>
 
       {confidence.clamped ? (
-        <p className="prediction__warning" data-testid="confidence-clamped-note">
+        <Typography.Paragraph type="warning" className="prediction__warning" data-testid="confidence-clamped-note">
           模型未优于基准，置信度按低展示（接口返回值与基准判定不一致，已按研究口径下调）。
-        </p>
+        </Typography.Paragraph>
       ) : null}
 
       {/* 概率与区间必须同时出现（spec §13.2） */}
@@ -164,6 +164,6 @@ export function PredictionPanel({
       </details>
 
       <Disclaimer />
-    </div>
+    </Card>
   );
 }

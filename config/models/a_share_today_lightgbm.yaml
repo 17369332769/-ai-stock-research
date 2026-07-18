@@ -11,7 +11,8 @@ feature_set_version: v1
 test_fraction: 0.20
 min_train_sessions: 250
 walk_forward_folds: 5
-validation_sessions: 60
+# 50 个交易日 × 5 折；保持五折互不重叠，并适配三年历史在 200 日特征暖机后的可用长度。
+validation_sessions: 50
 # embargo 不在这里配：它由 horizon 决定（today_close = 1 个交易日），
 # 写死在 training/labels.py 的 horizon_embargo_sessions，避免有人手滑调小。
 

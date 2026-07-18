@@ -52,8 +52,27 @@ export function getWatchlist(query: WatchlistQuery = {}) {
 
 export type ResearchPoolScope = 'csi300' | 'extra' | 'all';
 
-export function getResearchPool(scope: ResearchPoolScope = 'all', q?: string) {
-  return apiGetList<WatchlistItemDTO>('/research-pool', { scope, q });
+export async function getResearchPool(scope: ResearchPoolScope = 'all', q?: string) {
+  const first = await apiGetList<WatchlistItemDTO>('/research-pool', { scope, q, limit: 100 });
+  const items = [...first.items];
+  let cursor = first.page.has_more ? first.page.next_cursor ?? undefined : undefined;
+
+  while (cursor) {
+    const response = await apiGetList<WatchlistItemDTO>('/research-pool', {
+      scope,
+      q,
+      limit: 100,
+      cursor,
+    });
+    items.push(...response.items);
+    cursor = response.page.has_more ? response.page.next_cursor ?? undefined : undefined;
+  }
+
+  return {
+    ...first,
+    items,
+    page: { next_cursor: null, has_more: false },
+  };
 }
 
 export function addExtraWatchlistItem(symbol: string) {

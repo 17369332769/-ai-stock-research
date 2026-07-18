@@ -1,5 +1,6 @@
 import { BACKFILL_STEP_LABELS } from '@/lib/constants';
 import { BACKFILL_STEPS, type BackfillStep, type JobDTO } from '@/lib/api/types';
+import { Alert, Progress, Steps, Typography } from 'antd';
 
 export interface BackfillProgressProps {
   job: JobDTO;
@@ -21,51 +22,32 @@ export function BackfillProgress({ job }: BackfillProgressProps) {
   return (
     <div className="backfill" data-testid="backfill-progress" data-job-status={job.status}>
       <div className="backfill__head">
-        <span data-testid="backfill-step-counter">
+        <Typography.Text strong data-testid="backfill-step-counter">
           回补进度 {completed}/{total}
-        </span>
-        <span className="backfill__current" data-testid="backfill-current-step">
+        </Typography.Text>
+        <Typography.Text type="secondary" className="backfill__current" data-testid="backfill-current-step">
           {job.current_step ? `当前：${stepLabel(job.current_step)}` : '等待开始'}
-        </span>
+        </Typography.Text>
       </div>
-
-      <div
-        className="backfill__bar"
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={total}
-        aria-valuenow={completed}
-        aria-label="首次回补进度"
-      >
-        <div className="backfill__bar-fill" style={{ width: `${percent}%` }} />
-      </div>
-
-      <ol className="backfill__steps">
-        {BACKFILL_STEPS.map((step: BackfillStep, index) => {
+      <Progress percent={percent} status={job.status === 'failed' ? 'exception' : job.status === 'succeeded' ? 'success' : 'active'} aria-label="首次回补进度" />
+      <Steps
+        size="small"
+        current={Math.min(completed, BACKFILL_STEPS.length - 1)}
+        status={job.status === 'failed' ? 'error' : job.status === 'succeeded' ? 'finish' : 'process'}
+        items={BACKFILL_STEPS.map((step: BackfillStep, index) => {
           const done = index < completed;
           const active = job.current_step === step && !done;
           const state = done ? 'done' : active ? 'active' : 'pending';
-          return (
-            <li key={step} data-step={step} data-step-state={state} className={`backfill__step backfill__step--${state}`}>
-              {stepLabel(step)}
-            </li>
-          );
+          return { title: <span data-step={step} data-step-state={state}>{stepLabel(step)}</span> };
         })}
-      </ol>
+      />
 
       {job.warnings && job.warnings.length > 0 ? (
-        <ul className="backfill__warnings" data-testid="backfill-warnings">
-          {job.warnings.map((warning) => (
-            <li key={warning}>{warning}</li>
-          ))}
-        </ul>
+        <Alert type="warning" showIcon title="回补提示" description={job.warnings.join('；')} data-testid="backfill-warnings" />
       ) : null}
 
       {job.status === 'failed' ? (
-        <p className="backfill__error" data-testid="backfill-error">
-          回补失败{job.error_code ? `（${job.error_code}）` : ''}
-          {job.error_message ? `：${job.error_message}` : ''}
-        </p>
+        <Alert type="error" showIcon data-testid="backfill-error" title={`回补失败${job.error_code ? `（${job.error_code}）` : ''}`} description={job.error_message} />
       ) : null}
     </div>
   );

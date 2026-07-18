@@ -17,6 +17,7 @@ from apps.api.app.core.errors import (
     InvalidArgument,
     ProviderUnavailable,
 )
+from apps.api.app.core.pagination import Cursor
 from apps.api.app.models.tables import Analysis, Document, Instrument, Job, Prediction, WatchlistItem
 from apps.api.app.repositories import instruments as instruments_repo
 from apps.api.app.repositories import jobs as jobs_repo
@@ -30,8 +31,42 @@ from apps.api.app.services.market_state import current_market
 from apps.api.app.services.watchlist_service import AddResult
 
 ResearchScope = Literal["csi300", "extra", "all"]
+RESEARCH_POOL_SORT_KEY = "display_order"
 
 MODEL_SCOPE_WARNING = "该股票不属于模型主要训练股票池，预测可靠性可能较低。"
+
+
+def paginate_research_pool(
+    rows: list[WatchlistItemDTO], *, limit: int, cursor: Cursor | None
+) -> tuple[list[WatchlistItemDTO], Cursor | None, bool]:
+    """按稳定的展示顺序分页，避免一次响应无上限返回整个研究池。"""
+    start = 0
+    if cursor is not None:
+        try:
+            display_order = int(cursor.value)
+        except ValueError as exc:
+            raise InvalidArgument("研究池游标字段无效") from exc
+        cursor_key = (display_order, cursor.id)
+        start = next(
+            (
+                index
+                for index, row in enumerate(rows)
+                if (row.display_order, row.symbol) > cursor_key
+            ),
+            len(rows),
+        )
+
+    page = rows[start : start + limit]
+    has_more = start + limit < len(rows)
+    next_cursor = None
+    if has_more and page:
+        last = page[-1]
+        next_cursor = Cursor(
+            sort=RESEARCH_POOL_SORT_KEY,
+            value=str(last.display_order),
+            id=last.symbol,
+        )
+    return page, next_cursor, has_more
 
 
 async def list_research_pool(

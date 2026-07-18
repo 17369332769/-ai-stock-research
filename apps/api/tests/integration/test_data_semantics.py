@@ -38,6 +38,7 @@ from apps.api.tests.conftest import (
     seed_quote,
     seed_universe,
 )
+from services.prediction.training.registry import activate
 
 pytestmark = pytest.mark.integration
 
@@ -46,6 +47,24 @@ async def setup_member(session: AsyncSession) -> None:
     await seed_universe(session, AT_0950)
     await seed_instrument(session, AT_0950)
     await seed_membership(session, AT_0950)
+
+
+async def test_gate_passing_model_can_activate_without_beating_baseline(
+    session: AsyncSession,
+) -> None:
+    """spec §9.4：未优于基准仍可 active，置信度由推理层强制为 low。"""
+    row = await seed_model_version(
+        session,
+        status=ModelStatus.CANDIDATE,
+        metrics={
+            "better_than_baseline": False,
+            "release_gate": {"passed": True, "reasons": []},
+        },
+    )
+
+    await activate(session, model_key=row.model_key, version=row.version, now=AT_0950)
+
+    assert row.status == ModelStatus.ACTIVE.value
 
 
 # ── 成分有效期（验收 §15.16）─────────────────────────────────────────────────

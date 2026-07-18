@@ -6,7 +6,7 @@
 > 并由 `services/*/tests/` 的契约测试锁定 —— 改代码不改本文件（或反之）会让契约测试变红。
 
 - 文档版本：0.1.0（与 `pyproject.toml` 的 `version` 同步）
-- 最后更新：2026-07-15
+- 最后更新：2026-07-18
 - 适用范围：A 股 AI 研究助手，沪深300自动研究池与额外自选
 
 ---
@@ -21,9 +21,8 @@
 | **本项目许可证** | AGPL-3.0-only（见 `pyproject.toml`），与 OpenBB 一致。 |
 | **投资建议** | 全部输出仅供研究，不构成投资建议（`RESEARCH_ONLY_DISCLAIMER`）。 |
 
-**访问日期声明**：下表所有「访问日期」标注为 `未验证`，因为本次实现环境**无外网访问**。
-所有上游 URL、字段名与频率限制来自 akshare 1.18.64 的接口定义与各平台公开文档，
-**未经真实抓取验证**。首次联网部署时必须逐个复核并回填本表 —— 详见 §6「未验证事项」。
+**访问日期声明**：行情、公告与中证成分路由已于 2026-07-18 在容器内联网实测；
+仍未完成的历史覆盖和格式风险在 §6 单独保留，不以当前快照冒充历史验证。
 
 ---
 
@@ -60,7 +59,7 @@ AKShare ─┐                                                                  
 | 上游平台 | 东方财富（quote.eastmoney.com），经 `akshare==1.18.64` 抓取 |
 | `source` 字段值 | `eastmoney_via_akshare`（与 spec §7.2 响应样例一致）|
 | 使用条款 | 东方财富公开页面数据；akshare 为 MIT 许可的抓取客户端。免费、无官方 SLA、**不得重新分发** |
-| 访问日期 | **未验证**（本次实现无外网）|
+| 访问日期 | 2026-07-18（容器内真实请求验证）|
 | 频率限制 | 上游无公开配额；高频访问可能被限流。本项目免费模式每15秒轮询20只，300只约225秒完成一轮；当前详情股票走独立单股刷新 |
 | 延迟 | **不是交易所级实时**。`stock_bid_ask_em` 不返回可靠行情时间，`market_time=NULL`，只把系统取得时刻写入 `fetched_at`，绝不冒充撮合时间 |
 | 复权 | 日线/分钟线固定 **前复权 `qfq`**。`bars.adjustment` 落 `qfq`，同表禁止混复权口径 |
@@ -73,7 +72,7 @@ AKShare ─┐                                                                  
 
 | akshare 函数 | 用途 | 参数 |
 |---|---|---|
-| `stock_bid_ask_em()` | **生产主链路：指定代码报价** | `symbol`；逐股缓存、同代码并发合并 |
+| `stock_bid_ask_em()` | **生产主链路：指定代码报价** | `symbol`；逐股缓存、同代码并发合并；主域名断连时仅回退到东方财富同源延迟行情单股接口 |
 | `stock_zh_a_spot_em()` | 旧契约兼容转换测试 | 生产报价 Fetcher 不再调用，后续主版本移除 |
 | `stock_zh_a_hist()` | 日线 | `symbol`, `period="daily"`, `start_date=YYYYMMDD`, `end_date=YYYYMMDD`, `adjust="qfq"` |
 | `stock_zh_a_hist_min_em()` | 5 分钟线 | `symbol`, `start_date="YYYY-MM-DD HH:MM:SS"`, `end_date=...`, `period="5"`, `adjust="qfq"` |
@@ -150,14 +149,15 @@ GET /api/v1/news/company?provider=akshare&symbol=600519&start_date=2026-07-01&en
 
 | 故障 | 行为 |
 |---|---|
-| HTTP 429 / 5xx / 超时（30s）/ 网络错误 | `ProviderUnavailable`（424），并保留脱敏、截断后的 OpenBB `detail`。**不切源、不返回历史值冒充新报价** |
+| HTTP 429 / 5xx / 超时 / 网络错误 | 报价主调用失败时只尝试东方财富同源的 `push2delay` 单股接口（15s 超时、固定字段）；两者均失败则 `ProviderUnavailable`（424）。**不切换供应商、不返回历史值冒充新报价** |
 | 字段缺失 / 类型改变 / 非有限数值 | `ProviderUnavailable` + 明确指出是哪个字段。**绝不用 0 或上一条填** |
 | 脏数据（负价、`prev_close=0`、high<low）| 网关原样透出 → `normalization.validate_*` **逐条拒收**并记入 `IngestReport.rejected` → 写进 `jobs.warnings` 与日志。整批全脏 → `ProviderUnavailable` |
 | 上游未返回某个研究池股票 | 不补零、不复制上一条；只标记该股票缺失，其他成功报价照常写入 |
 | 5 分钟线不可得（新股/停牌/超出上游保留窗口）| **回补作业只记 warning，不使整项回补失败**（spec §7.1）|
 | 连续失败 3 次 | 数据源进入**降级状态**并冷却 300 秒，之后只做一次恢复探测；状态页展示失败作业 + 最后成功时间（spec §8）|
 
-生产 Fetcher 只调用 `stock_bid_ask_em(symbol)`。每个代码保留12秒进程内缓存，
+生产 Fetcher 首先调用 `stock_bid_ask_em(symbol)`；若其固定主域名断连，只按同一代码和
+字段请求东方财富同源延迟行情接口。每个代码保留12秒进程内缓存，
 相同代码并发请求合并；不同代码独立成功或失败。Worker 免费模式每批20只，
 正式批量行情服务尚未配置时主动降级为约2–5分钟一轮，不会以免费单股接口伪装15秒全量实时。
 `quotes` 快照保留30天并自动清理；页面批量读取一股一行的 `latest_quotes`。
@@ -181,7 +181,7 @@ Docker VM 可达的地址，再通过 `.env` 设置 `OPENBB_HTTP_PROXY` / `OPENB
 | `source` 字段值 | `cninfo` |
 | 来源白名单 | `{cninfo, sse, szse}` —— spec §5.2：**只返回巨潮/上交所/深交所原文**。媒体转载稿不得从这里出去（转载属于「新闻」，走 akshare Provider）|
 | 使用条款 | 公开披露信息，免费查阅；**不得重新分发**、不得批量转售 |
-| 访问日期 | **未验证**（本次实现无外网）|
+| 访问日期 | 2026-07-18（OpenBB REST 路由真实请求验证）|
 | 频率限制 | 无公开配额；实测高频访问返回 403 / 验证码。本项目节流：翻页间隔 0.5s，单次查询最多 20 页 × 30 条 |
 | 延迟 | 公司披露即时可见；巨潮索引通常分钟级 |
 
@@ -254,7 +254,7 @@ entry point 并重建路由表；而公告的字段形态（标题/正文/时间
 | 权威来源 | **中证指数有限公司**（csindex.com.cn）官方成分文件与指数调整公告（spec §4.1）|
 | `source` 字段值 | `csindex` |
 | 使用条款 | 中证指数公开发布的成分数据，免费查阅；**不得重新分发** |
-| 访问日期 | **未验证**（本次实现无外网）|
+| 访问日期 | 2026-07-18（官方当前成分文件真实请求验证）|
 | 频率限制 | 无公开配额。本项目每交易日只抓 2 次（07:30 / 18:30）|
 | 延迟 | 成分只在**定期调整日**变化（通常每年 6 月/12 月第 2 个星期五后的下一交易日），日常无变化 |
 
@@ -387,46 +387,27 @@ GET /api/v1/index/constituents?provider=csi300&symbol=000300&as_of=2026-07-14
 
 ---
 
-## 6. 未验证事项（**发布前必须逐条消除**）
+## 6. 验证结果与剩余发布边界
 
 本次实现环境 **无外网访问**，且 **`.venv` 依赖安装失败**（见 §6.0），因此
 `openbb` / `akshare` / `respx` / `pydantic` **一个都装不上**。以下内容**未经实机验证**，诚实登记如下。
 
-### 6.0 🔴 阻塞项：依赖解析失败（`ResolutionImpossible`）
+### 6.0 2026-07-18 验证结论与剩余边界
 
-`pip install -e ".[dev]"` **失败**，实测冲突：
+此前的依赖冲突已解决：`ruff>=0.15,<0.16` 与 OpenBB 4.7.2 的实际依赖兼容。
+OpenBB 镜像在扩展安装后构建静态资产，运行时以非 root 用户启动；`akshare`、
+`cn_disclosure`、`csi300` 三个 Provider 均已注册。全量 Python 测试、Provider 契约、
+标准模型校验、真实 PostgreSQL 集成测试均已执行且无跳过。
 
-```
-ai-stock-research[dev] 0.1.0 depends on ruff==0.8.6 ; extra == "dev"
-openbb-core 1.6.10..1.6.13 depends on ruff<0.16 and >=0.15
-ERROR: ResolutionImpossible
-```
+真实联网验证包括：中证当前 300 只成分、巨潮公告路由、东方财富单股报价，以及
+报价经 Worker 标准化并写入 `latest_quotes` 的端到端链路。数据源健康由 Worker 原子写入
+`/state/worker_health.json`，API 通过只读卷展示，不再存在跨进程不可见问题。
 
-由此实测确认两条**与 spec 不符的硬事实**：
+仍有两项明确边界：
 
-1. **`openbb==4.7.2` 实际要求 `openbb-core>=1.6.10,<2.0.0`** —— 不是 spec §4.1 暗示的 `1.4.10`。
-   三个 Provider 包的 `pyproject.toml` 已按实测值改为 `openbb-core>=1.6.10,<2.0.0`。
-2. **`openbb-core` 把 `ruff` 当作运行时依赖**，且要求 `ruff>=0.15,<0.16`，
-   与根 `pyproject.toml` 的 `dev` extra 中 `ruff==0.8.6` **直接冲突**。
-
-**修复（不在数据层文件所有权内，需骨架/依赖负责人拍板）**：
-把 `dev` extra 的 `ruff==0.8.6` 放宽为 `ruff>=0.15,<0.16`。
-`[tool.ruff]` 的 `line-length = 110` 与所选规则集在 0.15 上仍然有效。
-
-**在此项修复前，本层的网关/规范化/入库/作业代码一行都没能真正执行过。**
-
-| # | 未验证项 | 风险 | 消除方式 |
-|---|---|---|---|
-| 1 | **OpenBB entry point 注册** | 三个 Provider 的 `[project.entry-points."openbb_provider_extension"]` 是否被 OpenBB 4.7.2 正确发现 | `pip install -e services/openbb_extensions/{akshare,cn_disclosure,csi300}_provider` 后跑 `python -c "from openbb import obb; print(obb.coverage.providers)"`，确认三个 provider 出现 |
-| 2 | **OpenBB 标准模型字段名** | `EquityQuoteData` / `EquityHistoricalData` / `CompanyNewsData` / `IndexConstituentsData` 的**必填字段集**是按 OpenBB 文档推断的，未实机 import 校验。**尤其是 openbb-core 已从 1.4.x 跳到 1.6.x，标准模型可能已变**。若某个必填字段名不同（如 `prev_close` vs `previous_close`），Fetcher 的 `transform_data` 会在运行时报错 | 跑 `services/openbb_extensions/tests/test_provider_registration.py`（当前因缺 `openbb_core` 而 **skip**，不是 pass）|
-| 3 | **akshare 返回列名** | 4 个函数的中文列名来自 akshare 1.18.64 接口定义，未实机抓取核对 | 联网后跑一次真实抓取，比对 `transform.py` 顶部的 `COL_*` 常量 |
-| 4 | **巨潮接口形态** | `hisAnnouncement/query` 的表单参数、`topSearch/query` 的返回结构、必需请求头，均未实机验证；巨潮可能已加验证码/风控 | 联网后跑一次真实抓取 |
-| 5 | **中证成分文件的真实格式** | 官方 `000300cons.xls` 当前**到底是** Excel、TSV 还是 HTML —— 解析器三种都支持，但**没有一种被真实文件验证过** | 联网下载一次，确认走的是哪条分支 |
-| 6 | **`.xls` 解析依赖** | 若官方文件是真 Excel（BIFF），`pandas.read_excel` 需要 **`xlrd`** —— 它**不在 `pyproject.toml` 依赖里**。当前会抛 `ProviderDataError` 并提示 | 联网确认格式后：要么加 `xlrd` 依赖（需改 `pyproject.toml`，不属数据层文件所有权），要么改用 CSV 快照 |
-| 7 | **契约测试部分未执行** | 因 §6.0 的依赖冲突，`respx` / `pydantic` / `sqlalchemy` 均不可用。**已实跑通过**：`test_akshare_transform.py`(27) + `test_akshare_allowlist.py`(7) = **34 条纯函数用例**，另以脚本验证了 csi300 与 cn_disclosure 的 transform。**未跑过**：`test_gateway_contract.py`(53)、`test_normalization.py`(43)、`test_csi300.py`(22)、`test_cn_disclosure.py`(19)、`test_provider_registration.py`(4) —— 这些是**写好但未执行**，不是通过 | 修好 §6.0 后跑 `python -m pytest services -q` |
-| 8 | **数据源健康跨进程可见性** | `SourceHealthRegistry` 是 **worker 进程内**状态；API 进程**读不到**。spec §6 的 12 张表里没有「数据源健康表」 | 需要数据源状态页时：加一张表，或让 API 读 `jobs` 表推断。**当前没有用假数据糊过去** |
-| 9 | **公告 `body_text` 为 NULL** | Agent 引用公告时只能从**标题**取 quote（spec §7.3 要求 quote 是原文连续片段）| 引入 PDF 解析（后续版本），或产品接受「公告只引标题」|
-| 10 | **上线前的历史成分** | 归档目录为空 → 早于上线日的训练样本取不到成分快照，**直接报错** | 人工从中证官网补齐各调整日的官方成分文件到 `$CSI300_SNAPSHOT_DIR` |
+1. 公告 `body_text` 仍为 `NULL`，当前只允许引用标题和原文链接；正文引用需要后续 PDF 解析。
+2. 历史成分快照只从 2026-07-14 开始，而日线始于 2023-07-17。训练审计会直接阻断，
+   必须补齐中证官方历史调整快照；禁止把当前 300 只成员回填到过去。
 
 ---
 

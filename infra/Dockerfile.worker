@@ -51,3 +51,13 @@ USER app
 
 # 不 EXPOSE 任何端口：worker 只出不进（spec §14.3 最小暴露面）
 CMD ["python", "-m", "services.worker.scheduler"]
+
+# 训练与验收工具镜像：复用生产依赖层，仅额外安装 dev 依赖。运行时 worker 仍保持
+# 最小依赖和 /models 只读；只有显式启动 trainer 时才允许写模型产物。
+FROM runtime AS trainer
+
+USER root
+RUN pip install --no-cache-dir -e ".[dev]"
+USER app
+
+CMD ["python", "-m", "services.prediction.training.cli", "--help"]

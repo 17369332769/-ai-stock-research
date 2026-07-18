@@ -2,6 +2,8 @@ import { DIRECTION_LABELS, EVENT_HORIZON_LABELS, NO_VERIFIABLE_CAUSE_TEXT } from
 import { formatDateTime } from '@/lib/format';
 import type { AnalysisDTO } from '@/lib/api/types';
 import { EvidenceList } from './EvidenceList';
+import { RobotOutlined } from '@ant-design/icons';
+import { Alert, Card, Divider, Space, Tag, Typography } from 'antd';
 
 export interface AnalysisCardProps {
   analysis: AnalysisDTO;
@@ -29,50 +31,45 @@ export function AnalysisCard({ analysis }: AnalysisCardProps) {
   const summaryHasFixedText = analysis.summary.includes(NO_VERIFIABLE_CAUSE_TEXT);
 
   return (
-    <article className="analysis" data-testid="analysis-card" data-analysis-type={analysis.analysis_type}>
-      <div className="analysis__head">
-        <span
+    <Card className="analysis" data-testid="analysis-card" data-analysis-type={analysis.analysis_type} size="small" title={<Typography.Title level={3} className="analysis__card-title"><RobotOutlined /> AI 证据分析</Typography.Title>}>
+      <Space className="analysis__head" size={[8, 8]} wrap>
+        <Tag
+          color={direction === 'positive' ? 'error' : direction === 'negative' ? 'success' : 'default'}
           className={`badge badge--${DIRECTION_TONE[direction] ?? 'flat'}`}
           data-testid="analysis-direction"
         >
           影响方向：{DIRECTION_LABELS[direction]}
-        </span>
-        <span className="badge badge--neutral" data-testid="analysis-horizon">
+        </Tag>
+        <Tag data-testid="analysis-horizon">
           期限：{EVENT_HORIZON_LABELS[horizon]}
-        </span>
-        <span className="analysis__cutoff" data-testid="analysis-cutoff">
+        </Tag>
+        <Typography.Text type="secondary" className="analysis__cutoff" data-testid="analysis-cutoff">
           数据截止 {formatDateTime(analysis.data_cutoff)}
-        </span>
-      </div>
+        </Typography.Text>
+      </Space>
 
-      <p className="analysis__summary" data-testid="analysis-summary">
+      <Typography.Paragraph className="analysis__summary" data-testid="analysis-summary">
         {analysis.summary}
-      </p>
+      </Typography.Paragraph>
 
       {!hasEvidence && !summaryHasFixedText ? (
-        <p className="analysis__no-cause" data-testid="analysis-no-cause">
-          {NO_VERIFIABLE_CAUSE_TEXT}
-        </p>
+        <Alert type="warning" showIcon title={NO_VERIFIABLE_CAUSE_TEXT} data-testid="analysis-no-cause" />
       ) : null}
 
       {analysis.risk_flags && analysis.risk_flags.length > 0 ? (
-        <ul className="analysis__risks" data-testid="analysis-risk-flags">
-          {analysis.risk_flags.map((flag) => (
-            <li key={flag}>风险提示：{flag}</li>
-          ))}
-        </ul>
+        <Alert type="warning" showIcon title="风险提示" description={analysis.risk_flags.join('；')} className="analysis__risks" data-testid="analysis-risk-flags" />
       ) : null}
 
       <div className="analysis__evidence">
-        <h3 className="analysis__evidence-title">证据</h3>
+        <Divider className="analysis__evidence-title">证据</Divider>
         <EvidenceList evidence={analysis.evidence} />
       </div>
 
       {analysis.model_name ? (
-        <footer className="analysis__footer" data-testid="analysis-model">
+        <Typography.Text type="secondary" className="analysis__footer" data-testid="analysis-model">
           分析模型：{analysis.model_provider ?? '未知供应商'} / {analysis.model_name}
-        </footer>
+        </Typography.Text>
       ) : null}
-    </article>
+    </Card>
   );
 }

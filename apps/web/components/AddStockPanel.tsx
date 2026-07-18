@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
+import { Alert, Button, Empty, Input, List, Space, Tag, Typography } from 'antd';
 
 import { searchInstruments } from '@/lib/api/endpoints';
 import { errorCodeOf, errorMessage } from '@/lib/error-messages';
@@ -59,9 +61,9 @@ export function AddStockPanel({
       <form className="add-stock__form" onSubmit={handleSearch} role="search">
         <label className="field">
           <span className="field__label">按代码或名称搜索额外关注股票</span>
-          <input
-            className="field__input"
-            type="search"
+          <Input
+            size="large"
+            prefix={<SearchOutlined />}
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);
@@ -69,72 +71,71 @@ export function AddStockPanel({
             }}
             placeholder="例如 600519 或 贵州茅台"
             data-testid="instrument-search-input"
+            allowClear
           />
         </label>
-        <button
-          type="submit"
-          className="btn btn--primary"
+        <Button
+          htmlType="submit"
+          type="primary"
+          size="large"
+          icon={<SearchOutlined />}
           disabled={searching || query.trim().length === 0}
+          loading={searching}
           data-testid="instrument-search-submit"
         >
-          {searching ? '搜索中…' : '搜索'}
-        </button>
+          搜索
+        </Button>
       </form>
 
       {searchError ? (
-        <p className="form-error" role="alert" data-testid="search-error">
-          {errorMessage(searchError)}
-        </p>
+        <Alert type="error" showIcon title={errorMessage(searchError)} data-testid="search-error" />
       ) : null}
 
       {addError ? (
-        <p
-          className="form-error"
-          role="alert"
+        <Alert
+          type="error"
+          showIcon
+          title={errorMessage(addError)}
           data-testid="add-error"
           data-error-code={addErrorCode ?? 'UNKNOWN'}
-        >
-          {errorMessage(addError)}
-        </p>
+        />
       ) : null}
 
       {searched && !searching && results.length === 0 && !searchError ? (
         <div data-testid="search-empty">
-          <p className="empty-hint">
-            {directSymbol
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={directSymbol
               ? '本地尚无这只股票的名称，可先按代码加入；名称将在后续基础信息同步后更新。'
-              : '没有匹配的本地已知股票。可输入完整6位股票代码直接加入。'}
-          </p>
+              : '没有匹配的本地已知股票。可输入完整6位股票代码直接加入。'} />
           {directSymbol ? (
-            <button
-              type="button"
-              className="btn btn--primary"
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
               disabled={adding || addedSymbol === directSymbol}
+              loading={adding}
               onClick={() => onAdd(directSymbol)}
               data-testid={`add-${directSymbol}`}
             >
               {addedSymbol === directSymbol ? '已加入我的关注' : '按代码加入我的关注'}
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : null}
 
       {results.length > 0 ? (
-        <ul className="add-stock__results" data-testid="instrument-search-results">
-          {results.map((instrument) => (
-            <li key={instrument.symbol} className="add-stock__result" data-symbol={instrument.symbol}>
-              <span className="add-stock__symbol">{instrument.symbol}</span>
-              <span className="add-stock__name">{instrument.name}</span>
-              {instrument.industry ? (
-                <span className="add-stock__industry">{instrument.industry}</span>
-              ) : null}
-              {instrument.is_current_universe_member ? (
-                <span className="badge badge--ok">已在沪深300研究池</span>
-              ) : null}
-              <button
-                type="button"
-                className="btn btn--primary"
+        <List
+          className="add-stock__results"
+          data-testid="instrument-search-results"
+          dataSource={results}
+          renderItem={(instrument) => (
+            <List.Item
+              className="add-stock__result"
+              data-symbol={instrument.symbol}
+              actions={[<Button
+                key="add"
+                type="primary"
+                icon={<PlusOutlined />}
                 disabled={adding || instrument.is_current_universe_member || addedSymbol === instrument.symbol}
+                loading={adding && addedSymbol !== instrument.symbol}
                 onClick={() => onAdd(instrument.symbol)}
                 data-testid={`add-${instrument.symbol}`}
               >
@@ -143,10 +144,15 @@ export function AddStockPanel({
                   : addedSymbol === instrument.symbol
                     ? '已加入我的关注'
                     : '加入我的关注'}
-              </button>
-            </li>
-          ))}
-        </ul>
+              </Button>]}
+            >
+              <List.Item.Meta
+                title={<Space><Typography.Text strong>{instrument.name}</Typography.Text><Typography.Text code>{instrument.symbol}</Typography.Text></Space>}
+                description={<Space wrap>{instrument.industry ? <Tag>{instrument.industry}</Tag> : null}{instrument.is_current_universe_member ? <Tag color="success">已在沪深300研究池</Tag> : null}</Space>}
+              />
+            </List.Item>
+          )}
+        />
       ) : null}
     </div>
   );

@@ -30,7 +30,7 @@ async def test_csi300_member_is_automatic_without_watchlist_row(
     assert item["symbol"] == SYMBOL
     assert item["pool_source"] == "csi300"
     assert item["can_remove"] is False
-    assert item["industry"] is None
+    assert item["industry"] == "白酒"
     assert item["has_anomaly"] is False
     assert item["document_count"] == 0
     assert item["prediction_count"] == 0
@@ -77,6 +77,46 @@ async def test_research_pool_exposes_persisted_analysis_job(
     item = response.json()["data"][0]
     assert item["analysis_status"] == "queued"
     assert item["analysis_job"]["id"] == queued.json()["data"]["id"]
+
+
+async def test_research_pool_uses_cursor_pagination(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    await seed_universe(session, AT_0950)
+    for index in range(3):
+        symbol = f"60000{index}"
+        await seed_instrument(session, AT_0950, symbol=symbol, name=f"股票{index}")
+        await seed_membership(session, AT_0950, symbol=symbol)
+
+    first = await client.get("/api/v1/research-pool?scope=csi300&limit=2")
+    first_body = first.json()
+    assert [row["symbol"] for row in first_body["data"]] == ["600000", "600001"]
+    assert first_body["page"]["has_more"] is True
+
+    second = await client.get(
+        "/api/v1/research-pool",
+        params={
+            "scope": "csi300",
+            "limit": 2,
+            "cursor": first_body["page"]["next_cursor"],
+        },
+    )
+    second_body = second.json()
+    assert [row["symbol"] for row in second_body["data"]] == ["600002"]
+    assert second_body["page"]["has_more"] is False
+
+
+async def test_research_pool_rejects_invalid_cursor(
+    client: AsyncClient, session: AsyncSession
+) -> None:
+    await seed_universe(session, AT_0950)
+    await seed_instrument(session, AT_0950)
+    await seed_membership(session, AT_0950)
+
+    response = await client.get("/api/v1/research-pool?cursor=garbage!!")
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "INVALID_ARGUMENT"
 
 
 async def test_latest_quotes_endpoint_reads_research_scope(

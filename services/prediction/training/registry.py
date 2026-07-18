@@ -118,7 +118,7 @@ async def activate(
     """把 candidate 升为 active，并把同 key 的旧 active 退役。
 
     发布门槛不过 → 拒绝激活（spec §9.4：泄漏测试失败 / 验证覆盖不足 / 指标非有限
-    的候选**不得**成为 active）。002 进一步要求候选必须优于基准后才能激活。
+    的候选**不得**成为 active）。未优于基准并不阻止激活，但推理层会把置信度强制为 low。
     """
     stmt = select(ModelVersion).where(
         ModelVersion.model_key == model_key, ModelVersion.version == version
@@ -133,9 +133,6 @@ async def activate(
         raise ModelUnavailable(
             f"{model_key}/{version} 未通过发布门槛，拒绝激活：{reasons}"
         )
-    if not bool(row.validation_metrics.get("better_than_baseline", False)):
-        raise ModelUnavailable(f"{model_key}/{version} 未优于基准模型，拒绝激活")
-
     await session.execute(
         update(ModelVersion)
         .where(

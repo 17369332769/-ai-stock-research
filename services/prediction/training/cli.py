@@ -29,7 +29,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--activate-passing",
         action="store_true",
-        help="仅当发布门槛通过且优于基准时激活",
+        help="激活通过发布门槛的候选；未优于基准时仍激活但置信度强制为 low",
     )
     parser.add_argument("--no-qlib", action="store_true", help="不额外导出 Qlib 布局")
     return parser
@@ -67,8 +67,6 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
             if args.activate_passing:
                 if not run.model.release_gate.passed:
                     summary["activation"] = "blocked_by_release_gate"
-                elif not run.model.better_than_baseline:
-                    summary["activation"] = "blocked_not_better_than_baseline"
                 else:
                     await activate(
                         session,
@@ -77,7 +75,11 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
                         now=now,
                     )
                     summary["status"] = "active"
-                    summary["activation"] = "activated"
+                    summary["activation"] = (
+                        "activated"
+                        if run.model.better_than_baseline
+                        else "activated_low_confidence"
+                    )
             result["training_runs"].append(summary)
     return result
 

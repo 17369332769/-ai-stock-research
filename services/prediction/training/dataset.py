@@ -285,19 +285,19 @@ async def export_snapshot(
     daily = await _fetch_bars(session, Timeframe.DAY1.value, end, symbols)
     daily_path = directory / "bars_1d.parquet"
     _write_parquet(daily, BAR_COLUMNS, daily_path)
-    snapshots.append(_manifest_for("bars_1d", daily, BAR_COLUMNS, daily_path, root))
+    snapshots.append(_manifest_for("bars_1d", daily, BAR_COLUMNS, daily_path, directory))
 
     if include_minute:
         minute = await _fetch_bars(session, Timeframe.MIN5.value, end, symbols)
         minute_path = directory / "bars_5m.parquet"
         _write_parquet(minute, BAR_COLUMNS, minute_path)
-        snapshots.append(_manifest_for("bars_5m", minute, BAR_COLUMNS, minute_path, root))
+        snapshots.append(_manifest_for("bars_5m", minute, BAR_COLUMNS, minute_path, directory))
 
     documents = await _fetch_documents(session, end)
     documents_path = directory / "documents.parquet"
     _write_parquet(documents, DOCUMENT_COLUMNS, documents_path)
     snapshots.append(
-        _manifest_for("documents", documents, DOCUMENT_COLUMNS, documents_path, root)
+        _manifest_for("documents", documents, DOCUMENT_COLUMNS, documents_path, directory)
     )
 
     memberships = await membership_periods(session, universe_code)
@@ -306,7 +306,7 @@ async def export_snapshot(
     snapshots.append(
         SnapshotManifest(
             name="universe_memberships",
-            path=str(memberships_path.relative_to(root)),
+            path=str(memberships_path.relative_to(directory)),
             rows=len(memberships),
             columns=MEMBERSHIP_COLUMNS,
             min_datetime=min(
@@ -364,17 +364,15 @@ def load_series_from_snapshot(
     """从快照读回按标的组织的序列。返回（标的序列, 基准序列）。"""
     manifest.verify(directory)
 
-    daily_rows = _read_parquet(directory / manifest.snapshot("bars_1d").path.split("/", 1)[-1])
+    daily_rows = _read_parquet(directory / manifest.snapshot("bars_1d").path)
     minute_rows: list[dict[str, Any]] = []
     try:
         minute_manifest = manifest.snapshot("bars_5m")
     except KeyError:
         minute_manifest = None
     if minute_manifest is not None:
-        minute_rows = _read_parquet(directory / minute_manifest.path.split("/", 1)[-1])
-    document_rows = _read_parquet(
-        directory / manifest.snapshot("documents").path.split("/", 1)[-1]
-    )
+        minute_rows = _read_parquet(directory / minute_manifest.path)
+    document_rows = _read_parquet(directory / manifest.snapshot("documents").path)
 
     daily_by_symbol: dict[str, list[DailyBar]] = {}
     adjustments: dict[str, set[str]] = {}

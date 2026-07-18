@@ -29,6 +29,7 @@ class TrainingDataAudit:
     adjustments: dict[str, int]
     current_members: int
     membership_periods: int
+    membership_start: date | None
     minute_rows: int
     minute_symbols: int
     minute_start: datetime | None
@@ -57,6 +58,7 @@ class TrainingDataAudit:
             "membership": {
                 "current_members": self.current_members,
                 "periods": self.membership_periods,
+                "start": self.membership_start.isoformat() if self.membership_start else None,
             },
             "minute": {
                 "rows": self.minute_rows,
@@ -138,16 +140,15 @@ async def audit_training_data(session: AsyncSession, *, as_of: date) -> Training
         ).scalar_one()
         or 0
     )
-    periods = int(
-        (
-            await session.execute(
-                select(func.count()).select_from(UniverseMembership).where(
-                    UniverseMembership.universe_code == CSI300_CODE
-                )
+    membership = (
+        await session.execute(
+            select(func.count(), func.min(UniverseMembership.effective_from)).where(
+                UniverseMembership.universe_code == CSI300_CODE
             )
-        ).scalar_one()
-        or 0
-    )
+        )
+    ).one()
+    periods = int(membership[0] or 0)
+    membership_start = membership[1]
     minute = (
         await session.execute(
             select(
@@ -164,7 +165,10 @@ async def audit_training_data(session: AsyncSession, *, as_of: date) -> Training
     if int(daily[0]) == 0:
         blockers.append("日线为空")
     if insufficient:
-        blockers.append(f"{len(insufficient)} 只股票日线少于 {MIN_DAILY_SESSIONS} 个交易日")
+        warnings.append(
+            f"{len(insufficient)} 只股票日线少于 {MIN_DAILY_SESSIONS} 个交易日；"
+            "训练自动跳过无法形成完整特征/标签的样本"
+        )
     if invalid_ohlcv:
         blockers.append(f"存在 {invalid_ohlcv} 条非法 OHLCV")
     if len(adjustments) != 1:
@@ -175,6 +179,14 @@ async def audit_training_data(session: AsyncSession, *, as_of: date) -> Training
         )
     if periods == 0:
         blockers.append("缺少沪深300历史成分有效期")
+    elif daily[2] is not None and membership_start is not None:
+        daily_start = daily[2].date()
+        if membership_start > daily_start:
+            blockers.append(
+                "沪深300历史成分覆盖不足："
+                f"成分始于 {membership_start.isoformat()}，"
+                f"日线始于 {daily_start.isoformat()}"
+            )
     if int(minute[0]) == 0:
         warnings.append("5分钟线为空：日频模型仍可训练，盘中模型保持不可用")
     elif minute[2] is not None and minute[3] is not None:
@@ -194,6 +206,7 @@ async def audit_training_data(session: AsyncSession, *, as_of: date) -> Training
         adjustments=adjustments,
         current_members=current_members,
         membership_periods=periods,
+        membership_start=membership_start,
         minute_rows=int(minute[0]),
         minute_symbols=int(minute[1]),
         minute_start=minute[2],
